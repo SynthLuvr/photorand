@@ -22,7 +22,7 @@ A True Random Number Generator (TRNG) using raw camera sensor data to extract ph
 ```
 ├── src/
 │   ├── __init__.py        # Package init (re-exports, version)
-│   ├── __main__.py        # CLI entry point (python -m src)
+│   ├── __main__.py        # CLI entry point (`uv run photorand` / `python -m src`)
 │   ├── logger.py          # Central logger
 │   ├── low_level/         # Modular primitives (ingest, sample, entropy, hash, csprng)
 │   ├── high_level/        # OO abstractions (PhotoRandSeed, PhotoRandEngine)
@@ -129,26 +129,46 @@ multiple_passwords = engine.generate_batch(engine.next_string, n=5, length=16)
 
 #### CLI (Command Line Interface)
 
-The package includes a powerful CLI to use these classes directly from your terminal.
+The package includes a CLI to use these classes directly from your terminal. Because the project
+uses [uv](https://docs.astral.sh/uv/), commands are run with `uv run`. The `photorand` entry
+point is registered in `pyproject.toml` and installed automatically by `uv sync`.
+
+> Every subcommand has its own `--help`, e.g. `uv run photorand extract --help`.
+
+**`extract`** — extract a single value of true physical entropy (64 bytes) from a RAW image:
 
 ```bash
-# Extract 64-byte photorand seed (hex)
-python -m src extract hex --from path/to/raw_image.ARW
+# Extract the seed as a hex string
+uv run photorand extract hex --from path/to/raw_image.ARW
 
 # Roll a D20
-python -m src extract int-range --from path/to/raw_image.ARW --min 1 --max 20
+uv run photorand extract int-range --from path/to/raw_image.ARW --min 1 --max 20
 
-# Generate 5 random 16-char alphanumeric passwords
-python -m src generate string --from path/to/raw_image.ARW -n 5 -l 16 --charset alpha
-
-# Measure the entropy quality of a RAW image's sensor noise
-python -m src assess --from path/to/raw_image.ARW
-
-# Get the assessment as JSON (for scripting)
-python -m src assess --from path/to/raw_image.ARW --json
+# Save the seed to a file: --binary writes raw bytes, omit it to write hex text
+uv run photorand extract hex --from path/to/raw_image.ARW -o seed.bin --binary
 ```
 
-*For more details, run:* `python -m src --help`
+**`generate`** — expand the seed via ChaCha20 into an arbitrary amount of CSPRNG data:
+
+```bash
+# Generate 5 random 16-char alphanumeric passwords
+uv run photorand generate string --from path/to/raw_image.ARW -n 5 -l 16 --charset alpha
+
+# 32 random bytes (hex-encoded)
+uv run photorand generate bytes --from path/to/raw_image.ARW -l 32
+```
+
+**`assess`** — measure the entropy quality of a RAW image's sensor noise:
+
+```bash
+# Human-readable entropy report
+uv run photorand assess --from path/to/raw_image.ARW
+
+# Machine-readable JSON output (great for scripting)
+uv run photorand assess --from path/to/raw_image.ARW --json
+```
+
+*For the full list of commands and options, run:* `uv run photorand --help`
 
 ---
 
