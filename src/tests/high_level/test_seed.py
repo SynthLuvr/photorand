@@ -4,22 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
-import pytest
-
 from src.high_level.seed import PhotoRandSeed
+from src.tests.conftest import requires_raw_data
 
 # Determine the path to the test data
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TEST_IMAGE = str(DATA_DIR / "DSC02111.ARW")
 
-_RAW_FILE = DATA_DIR / "DSC02111.ARW"
-_HAS_RAW_DATA = _RAW_FILE.exists() and _RAW_FILE.stat().st_size > 1024
-_SKIP_RAW = pytest.mark.skipif(
-    not _HAS_RAW_DATA, reason="RAW test data unavailable (Git LFS pointer or missing)"
-)
 
-
-@_SKIP_RAW
+@requires_raw_data
 class TestPhotoRandSeed:
     """Tests for the PhotoRandSeed (TRNG) class."""
 

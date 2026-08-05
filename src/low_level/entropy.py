@@ -1,27 +1,10 @@
 """Entropy estimation and statistical health testing for raw entropy pools.
 
-This module closes the most critical gap in the original photorand design:
-the *assumption* that all sampled sensor LSBs are uniformly random.  By
-**measuring** the actual min-entropy of the sampled pool *before*
-conditioning, we can determine how much true entropy is present — following
-the NIST SP 800-90B principle of **"measure first, then condition."**
-
-A cryptographic hash (SHA3-512) is a *whitener*: it distributes existing
-entropy uniformly but can never *create* entropy.  If the raw pool contains
-50 bits of min-entropy, the 512-bit digest still contains only ~50 bits.
-Statistical tests will pass on the hash output regardless, which is why
-test-passing cannot serve as evidence of entropy — the measurement must
-happen on the raw source.
-
-Estimators implemented (NIST SP 800-90B):
-    - Most Common Value (MCV) estimator (§6.1) — primary min-entropy bound
-    - Collision estimator (§6.3)
-    - Shannon entropy — information-theoretic upper bound
-
-Statistical tests:
-    - Chi-square goodness-of-fit test for discrete uniformity
-    - Repetition Count Test (§4.4.1)
-    - Adaptive Proportion Test (§4.4.2)
+Implements NIST SP 800-90B estimators and health checks to measure the
+actual min-entropy of the sampled pool *before* SHA3-512 conditioning.
+A hash distributes entropy but cannot create it: a 512-bit digest of a
+50-bit source still contains ~50 bits.  Statistical tests pass on hash
+output regardless, so the measurement must happen on the raw source.
 """
 
 from __future__ import annotations
@@ -38,13 +21,9 @@ _Z_99_9999 = 4.753
 # Significance level for the chi-square uniformity test.
 _CHI_ALPHA = 0.01
 
-
-# ---------------------------------------------------------------------------
-# Regularised incomplete gamma function (for chi-square p-values)
-#
-# scipy is not a dependency, so we implement P(a, x) and Q(a, x) directly
-# using the series / continued-fraction pair from Numerical Recipes (3rd ed.).
-# ---------------------------------------------------------------------------
+# scipy is not a dependency, so P(a, x) and Q(a, x) are implemented directly
+# using the series / continued-fraction pair from Numerical Recipes (3rd ed.),
+# used here for chi-square p-values.
 
 
 def _gamma_series(a: float, x: float) -> float:
@@ -109,17 +88,9 @@ def _chi2_sf(statistic: float, df: int) -> float:
     return _gamma_q(df / 2.0, statistic / 2.0)
 
 
-# ---------------------------------------------------------------------------
-# Result container
-# ---------------------------------------------------------------------------
-
-
 @dataclass(frozen=True)
 class EntropyAssessment:
-    """Comprehensive entropy analysis of a raw entropy pool.
-
-    All entropy estimates are expressed in **bits per symbol**.
-    """
+    """Entropy analysis of a raw entropy pool, in bits per symbol."""
 
     # --- Meta ---
     sample_count: int
@@ -152,17 +123,14 @@ class EntropyAssessment:
 
     @property
     def passed_health_checks(self) -> bool:
-        """``True`` when every NIST health check passes."""
         return self.repetition_count_passed and self.adaptive_proportion_passed
 
     @property
     def sufficient_for_seed(self) -> bool:
-        """``True`` if the measured entropy meets or exceeds 512 bits."""
         return self.total_entropy_bits >= 512.0
 
     @property
     def overall_status(self) -> str:
-        """Human-readable quality verdict."""
         if not self.passed_health_checks:
             return "FAIL"
         if not self.sufficient_for_seed:
@@ -170,11 +138,6 @@ class EntropyAssessment:
         if not self.is_uniform:
             return "WARN"
         return "GOOD"
-
-
-# ---------------------------------------------------------------------------
-# Symbol extraction
-# ---------------------------------------------------------------------------
 
 
 def _extract_symbols(data: bytes, bits_per_symbol: int) -> list[int]:
@@ -185,25 +148,17 @@ def _extract_symbols(data: bytes, bits_per_symbol: int) -> list[int]:
     return [b & mask for b in data]
 
 
-# ---------------------------------------------------------------------------
-# Min-entropy estimators
-# ---------------------------------------------------------------------------
-
-
-def _mcv_estimate(symbols: list[int], bits_per_symbol: int) -> tuple[float, int, int]:
+def _mcv_estimate(symbols: list[int], bits_per_symbol: int) -> float:
     """NIST SP 800-90B Most Common Value estimator (§6.1).
 
-    The most conservative and robust min-entropy estimator: it bounds
-    min-entropy by the frequency of the single most common value, with a
+    Bounds min-entropy by the frequency of the most common value, with a
     one-sided confidence correction.
-
-    Returns ``(estimate_bits, most_common_symbol, most_common_count)``.
     """
     n = len(symbols)
     if n == 0:
-        return 0.0, 0, 0
+        return 0.0
     counter = Counter(symbols)
-    most_common_symbol, max_count = counter.most_common(1)[0]
+    _, max_count = counter.most_common(1)[0]
     p_max = max_count / n
     # Upper confidence bound on p_max (one-sided, 2^-20).
     p_bound = min(
@@ -211,14 +166,13 @@ def _mcv_estimate(symbols: list[int], bits_per_symbol: int) -> tuple[float, int,
         p_max + _Z_99_9999 * math.sqrt(p_max * (1.0 - p_max) / n),
     )
     estimate = float(bits_per_symbol) if p_bound < 1e-12 else -math.log2(p_bound)
-    estimate = max(0.0, min(estimate, float(bits_per_symbol)))
-    return estimate, most_common_symbol, max_count
+    return max(0.0, min(estimate, float(bits_per_symbol)))
 
 
 def _collision_estimate(symbols: list[int], bits_per_symbol: int) -> float:
     """NIST SP 800-90B Collision estimator (§6.3).
 
-    Records the distance between *consecutive* occurrences of each symbol
+    Records the distance between consecutive occurrences of each symbol
     (not the birthday-problem "first collision"), converts the mean
     collision time to a probability, then to a min-entropy estimate.
     """
@@ -230,7 +184,6 @@ def _collision_estimate(symbols: list[int], bits_per_symbol: int) -> float:
         last_pos[s] = i
 
     if not collision_times:
-        # No repeats at all → maximum entropy.
         return float(bits_per_symbol)
 
     c = len(collision_times)
@@ -244,9 +197,7 @@ def _collision_estimate(symbols: list[int], bits_per_symbol: int) -> float:
         stderr = 0.0
 
     # Lower confidence bound on mean collision time.
-    lower = mean_t - _Z_99_9999 * stderr
-    if lower < 0.1:
-        lower = 0.1
+    lower = max(mean_t - _Z_99_9999 * stderr, 0.1)
 
     p = 1.0 - math.exp(-1.0 / lower)
     if p <= 0.0:
@@ -265,11 +216,6 @@ def _shannon_entropy(symbols: list[int], bits_per_symbol: int) -> float:
         p = count / n
         h -= p * math.log2(p)
     return min(h, float(bits_per_symbol))
-
-
-# ---------------------------------------------------------------------------
-# Chi-square uniformity test
-# ---------------------------------------------------------------------------
 
 
 def _chi_square_test(symbols: list[int], alphabet_size: int) -> tuple[float, float, bool]:
@@ -293,16 +239,11 @@ def _chi_square_test(symbols: list[int], alphabet_size: int) -> tuple[float, flo
     return statistic, p_value, p_value >= _CHI_ALPHA
 
 
-# ---------------------------------------------------------------------------
-# Health checks (NIST SP 800-90B §4.4)
-# ---------------------------------------------------------------------------
-
-
 def _repetition_count_test(symbols: list[int], bits_per_symbol: int) -> tuple[bool, int, int]:
     """NIST SP 800-90B Repetition Count Test (§4.4.1).
 
-    Detects stuck-at faults or catastrophic bias by flagging runs of
-    identical consecutive values that are too long to occur by chance.
+    Detects stuck-at faults by flagging runs of identical consecutive
+    values that are too long to occur by chance.
 
     Returns ``(passed, max_run_length, cutoff)``.
     """
@@ -328,8 +269,8 @@ def _adaptive_proportion_test(
     """NIST SP 800-90B Adaptive Proportion Test (§4.4.2).
 
     Uses non-overlapping windows.  For each window, counts how often the
-    first sample repeats; a count above the cutoff indicates a distribution
-    that has drifted away from uniform.
+    first sample repeats; a count above the cutoff indicates drift away
+    from uniform.
 
     Returns ``(passed, max_count, cutoff, num_windows)``.
     """
@@ -357,17 +298,11 @@ def _adaptive_proportion_test(
     return max_count <= cutoff, max_count, cutoff, num_windows
 
 
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
-
-
 def estimate_entropy(data: bytes, bits_per_symbol: int = 4) -> EntropyAssessment:
     """Perform a full entropy assessment on a raw byte pool.
 
     Runs all NIST SP 800-90B min-entropy estimators, a chi-square
-    uniformity test, and startup health checks, then returns a single
-    :class:`EntropyAssessment`.
+    uniformity test, and startup health checks.
 
     Args:
         data: Raw entropy bytes — one symbol per byte (the low
@@ -389,8 +324,7 @@ def estimate_entropy(data: bytes, bits_per_symbol: int = 4) -> EntropyAssessment
         alphabet_size,
     )
 
-    # --- Estimators ---
-    mcv_est, _sym, _cnt = _mcv_estimate(symbols, bits_per_symbol)
+    mcv_est = _mcv_estimate(symbols, bits_per_symbol)
     coll_est = _collision_estimate(symbols, bits_per_symbol)
     shannon = _shannon_entropy(symbols, bits_per_symbol)
 
@@ -399,10 +333,7 @@ def estimate_entropy(data: bytes, bits_per_symbol: int = 4) -> EntropyAssessment
     total_bits = min_entropy * n
     max_bytes = min(int(total_bits // 8), 64)
 
-    # --- Chi-square uniformity ---
     chi_stat, chi_p, uniform = _chi_square_test(symbols, alphabet_size)
-
-    # --- Health checks ---
     rep_ok, rep_max, rep_cut = _repetition_count_test(symbols, bits_per_symbol)
     ap_ok, ap_max, ap_cut, ap_win = _adaptive_proportion_test(symbols, alphabet_size)
 

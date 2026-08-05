@@ -10,15 +10,21 @@ import pytest
 if TYPE_CHECKING:
     import numpy as np
 
+_DATA_DIR = Path(__file__).resolve().parent / "data"
+_RAW_FILE = _DATA_DIR / "DSC02111.ARW"
+_HAS_RAW_DATA = _RAW_FILE.exists() and _RAW_FILE.stat().st_size > 1024
+
+requires_raw_data = pytest.mark.skipif(
+    not _HAS_RAW_DATA, reason="RAW test data unavailable (Git LFS pointer or missing)"
+)
+
 
 @pytest.fixture
 def example_image_path() -> str:
     """Provide absolute path to the realistic test image."""
-    base_dir = Path(__file__).resolve().parent
-    path = base_dir / "data" / "DSC02111.ARW"
-    if not path.exists() or path.stat().st_size < 1024:
+    if not _HAS_RAW_DATA:
         pytest.skip("RAW test data unavailable (Git LFS pointer or missing)")
-    return str(path)
+    return str(_RAW_FILE)
 
 
 @pytest.fixture

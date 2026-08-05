@@ -14,14 +14,9 @@ if TYPE_CHECKING:
 class PhotoRandSeed:
     """True Random Number Generator (TRNG) interface.
 
-    This class extracts physical entropy (photon and thermal noise) from a RAW
-    image file to create a pure, unbiased 64-byte seed. It serves as the primary
-    source of true entropy for cryptographic operations.
-
-    Following NIST SP 800-90B ("measure first, then condition"), the seed also
-    runs a full entropy assessment on the raw sampled pool *before* SHA3-512
-    conditioning.  The assessment is accessible via the :attr:`assessment`
-    property so callers can verify how much true entropy was measured.
+    Extracts physical entropy from a RAW image to create a 64-byte seed.
+    Following NIST SP 800-90B, it also assesses the raw sampled pool before
+    SHA3-512 conditioning — accessible via the :attr:`assessment` property.
     """
 
     def __init__(self, image_path: str) -> None:
@@ -32,8 +27,7 @@ class PhotoRandSeed:
         """
         logger.info("[PhotoRandSeed] Extracting TRNG entropy from: %s", image_path)
 
-        # Run the full pipeline: ingest → sample → assess → hash.
-        self._raw_seed, self._entropy_pool, self._assessment = generate_with_assessment(image_path)
+        self._raw_seed, _, self._assessment = generate_with_assessment(image_path)
 
         logger.info(
             "[PhotoRandSeed] Seed generated. Measured min-entropy: %.3f bits/symbol "
@@ -45,12 +39,7 @@ class PhotoRandSeed:
 
     @property
     def assessment(self) -> EntropyAssessment:
-        """Return the NIST SP 800-90B entropy assessment of the sampled pool.
-
-        This tells you *how much* true entropy was measured — not just that
-        the hash output passes statistical tests (which it always will,
-        even on low-entropy input).
-        """
+        """Return the NIST SP 800-90B entropy assessment of the sampled pool."""
         return self._assessment
 
     def to_bytes(self) -> bytes:

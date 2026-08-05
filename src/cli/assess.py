@@ -89,14 +89,11 @@ def handle_assess(args: argparse.Namespace) -> None:
         args: Parsed CLI arguments.
     """
     image_path: str = args.image_path
-    reduce_fpn: bool = not getattr(args, "no_fpn", False)
-    json_output: bool = getattr(args, "json", False)
+    reduce_fpn: bool = not args.no_fpn
+    json_output: bool = args.json
 
     try:
         raw_image_data = ingest_raw_image(image_path)
-    except (FileNotFoundError, IsADirectoryError) as e:
-        logger.error(str(e))
-        sys.exit(1)
     except Exception as e:
         logger.error("Error reading image: %s", e)
         sys.exit(1)

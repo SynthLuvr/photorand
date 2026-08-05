@@ -5,22 +5,16 @@ from __future__ import annotations
 from pathlib import Path
 
 import numpy as np
-import pytest
 
 from src.low_level.generate import generate_true_random_number
+from src.tests.conftest import requires_raw_data
 
 # Determine the path to the test data
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TEST_IMAGE = str(DATA_DIR / "DSC02111.ARW")
 
-_RAW_FILE = DATA_DIR / "DSC02111.ARW"
-_HAS_RAW_DATA = _RAW_FILE.exists() and _RAW_FILE.stat().st_size > 1024
-_SKIP_RAW = pytest.mark.skipif(
-    not _HAS_RAW_DATA, reason="RAW test data unavailable (Git LFS pointer or missing)"
-)
 
-
-@_SKIP_RAW
+@requires_raw_data
 def test_generate_true_random_number_basic() -> None:
     """Verify the high-level functional pipeline returns 64 bytes."""
     seed = generate_true_random_number(TEST_IMAGE)
@@ -28,7 +22,7 @@ def test_generate_true_random_number_basic() -> None:
     assert len(seed) == 64
 
 
-@_SKIP_RAW
+@requires_raw_data
 def test_generate_true_random_number_deterministic() -> None:
     """Verify that same image produces same seed."""
     seed1 = generate_true_random_number(TEST_IMAGE)
