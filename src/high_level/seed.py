@@ -19,6 +19,9 @@ class PhotoRandSeed:
     SHA3-512 conditioning — accessible via the :attr:`assessment` property.
     """
 
+    _raw_seed: bytes
+    _assessment: EntropyAssessment
+
     def __init__(self, image_path: str) -> None:
         """Initialize the TRNG by ingesting a RAW image and extracting entropy.
 
@@ -36,6 +39,52 @@ class PhotoRandSeed:
             self._assessment.total_entropy_bits,
             self._assessment.overall_status,
         )
+
+    @classmethod
+    def from_webcam(
+        cls,
+        duration: float = 5.0,
+        camera_index: int = 0,
+    ) -> PhotoRandSeed:
+        """Build a TRNG seed from a webcam capture instead of a RAW file.
+
+        Captures temporal sensor noise for *duration* seconds and runs it
+        through the same entropy pipeline as a file-based seed.  Requires the
+        optional ``capture`` extra (``opencv-python-headless``).
+
+        Args:
+            duration: Capture length in seconds (default 5).
+            camera_index: Camera device index (default 0).
+
+        Returns:
+            A :class:`PhotoRandSeed` derived from the webcam capture.
+
+        Raises:
+            WebcamCaptureError: If capture cannot proceed (missing optional
+                dependency, no accessible camera, or too few frames).
+        """
+        from src.low_level.capture import generate_from_webcam
+
+        logger.info(
+            "[PhotoRandSeed] Extracting TRNG entropy from webcam %d (%.1fs)",
+            camera_index,
+            duration,
+        )
+        raw_seed, _pool, assessment = generate_from_webcam(
+            duration=duration, camera_index=camera_index
+        )
+
+        obj = cls.__new__(cls)
+        obj._raw_seed = raw_seed
+        obj._assessment = assessment
+        logger.info(
+            "[PhotoRandSeed] Webcam seed generated. Measured min-entropy: %.3f bits/symbol "
+            "(%.1f total bits). Status: %s.",
+            assessment.min_entropy,
+            assessment.total_entropy_bits,
+            assessment.overall_status,
+        )
+        return obj
 
     @property
     def assessment(self) -> EntropyAssessment:

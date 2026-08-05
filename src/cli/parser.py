@@ -5,6 +5,34 @@ from __future__ import annotations
 import argparse
 
 
+def _add_format_subparsers(
+    command_parser: argparse.ArgumentParser,
+    common: argparse.ArgumentParser,
+) -> None:
+    """Add the shared hex/int/bool/float/int-range/float-range output formats.
+
+    Used by both ``extract`` and ``capture`` so their output set is identical.
+    """
+    format_subparsers = command_parser.add_subparsers(dest="format", required=True)
+
+    format_subparsers.add_parser("hex", parents=[common], help="Output as hex string")
+    format_subparsers.add_parser("int", parents=[common], help="Output as large integer")
+    format_subparsers.add_parser("bool", parents=[common], help="Output as boolean")
+    format_subparsers.add_parser("float", parents=[common], help="Output as float between 0 and 1")
+
+    int_range = format_subparsers.add_parser(
+        "int-range", parents=[common], help="Output integer in range"
+    )
+    int_range.add_argument("--min", type=int, required=True, help="Lower bound (inclusive)")
+    int_range.add_argument("--max", type=int, required=True, help="Upper bound (inclusive)")
+
+    float_range = format_subparsers.add_parser(
+        "float-range", parents=[common], help="Output float in range"
+    )
+    float_range.add_argument("--min", type=float, required=True, help="Lower bound (inclusive)")
+    float_range.add_argument("--max", type=float, required=True, help="Upper bound (exclusive)")
+
+
 def create_parser() -> tuple[
     argparse.ArgumentParser, argparse.ArgumentParser, argparse.ArgumentParser
 ]:
@@ -89,30 +117,53 @@ def create_parser() -> tuple[
         "extract",
         help="Extract 64 bytes of true physical entropy from a RAW image.",
     )
-    extract_subparsers = extract_parser.add_subparsers(dest="format", required=True)
+    _add_format_subparsers(extract_parser, extract_common)
 
-    extract_subparsers.add_parser("hex", parents=[extract_common], help="Output as hex string")
-    extract_subparsers.add_parser("int", parents=[extract_common], help="Output as large integer")
-    extract_subparsers.add_parser("bool", parents=[extract_common], help="Output as boolean")
-    extract_subparsers.add_parser(
-        "float", parents=[extract_common], help="Output as float between 0 and 1"
+    # ------------------------------------------------------------------
+    # 'capture' subcommand (optional webcam source)
+    # ------------------------------------------------------------------
+    capture_common = argparse.ArgumentParser(add_help=False)
+    capture_common.add_argument(
+        "--duration",
+        type=float,
+        default=5.0,
+        help="Capture duration in seconds (default: 5).",
+    )
+    capture_common.add_argument(
+        "--camera",
+        type=int,
+        default=0,
+        help="Camera device index (default: 0).",
+    )
+    capture_common.add_argument(
+        "-o",
+        "--out",
+        "--to",
+        dest="out",
+        help="File path to save output. Omit to print to stdout.",
+    )
+    capture_common.add_argument(
+        "--binary",
+        action="store_true",
+        help="Write raw binary bytes when saving to a file (requires --out).",
+    )
+    capture_common.add_argument(
+        "--allow-weak",
+        action="store_true",
+        help="Emit the seed even when entropy health checks report FAIL.",
+    )
+    capture_common.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging.",
     )
 
-    extract_int_range = extract_subparsers.add_parser(
-        "int-range", parents=[extract_common], help="Output integer in range"
+    capture_parser = subparsers.add_parser(
+        "capture",
+        help="Capture entropy from a webcam (requires the 'capture' extra).",
     )
-    extract_int_range.add_argument("--min", type=int, required=True, help="Lower bound (inclusive)")
-    extract_int_range.add_argument("--max", type=int, required=True, help="Upper bound (inclusive)")
-
-    extract_float_range = extract_subparsers.add_parser(
-        "float-range", parents=[extract_common], help="Output float in range"
-    )
-    extract_float_range.add_argument(
-        "--min", type=float, required=True, help="Lower bound (inclusive)"
-    )
-    extract_float_range.add_argument(
-        "--max", type=float, required=True, help="Upper bound (exclusive)"
-    )
+    _add_format_subparsers(capture_parser, capture_common)
 
     # ------------------------------------------------------------------
     # 'assess' subcommand

@@ -15,6 +15,35 @@ if TYPE_CHECKING:
     import numpy as np
 
 
+def condition_entropy_pool(
+    raw_image_data: np.ndarray,
+    sample_fn: Callable[..., bytes] = sample_entropy_grid,
+    hash_fn: Callable[[bytes], bytes] = hash_entropy_pool,
+) -> tuple[bytes, bytes, EntropyAssessment]:
+    """Sample, assess, and condition a raw sensor array into a TRNG seed.
+
+    This is the source-agnostic core of the pipeline: any ingest function that
+    yields a 2-D sensor array (a RAW file, a webcam capture, …) funnels through
+    here so the estimator and conditioner are applied identically everywhere.
+
+    Args:
+        raw_image_data: A 2-D array of sensor values from any ingest source.
+        sample_fn: Samples the array and returns a byte stream of raw entropy.
+            Defaults to :func:`sample_entropy_grid`.
+        hash_fn: Hashes the entropy pool into a fixed-length, uniformly
+            distributed byte string. Defaults to :func:`hash_entropy_pool`.
+
+    Returns:
+        ``(seed, entropy_pool, assessment)`` where *seed* is the 64-byte
+        SHA3-512 digest, *entropy_pool* is the raw pre-hash bytes, and
+        *assessment* is the :class:`EntropyAssessment`.
+    """
+    entropy_pool = sample_fn(raw_image_data)
+    assessment = estimate_entropy(entropy_pool)
+    secure_hash_bytes = hash_fn(entropy_pool)
+    return secure_hash_bytes, entropy_pool, assessment
+
+
 def generate_with_assessment(
     image_path: str,
     ingest_fn: Callable[[str], np.ndarray] = ingest_raw_image,
@@ -41,10 +70,7 @@ def generate_with_assessment(
         *assessment* is the :class:`EntropyAssessment`.
     """
     raw_image_data = ingest_fn(image_path)
-    entropy_pool = sample_fn(raw_image_data)
-    assessment = estimate_entropy(entropy_pool)
-    secure_hash_bytes = hash_fn(entropy_pool)
-    return secure_hash_bytes, entropy_pool, assessment
+    return condition_entropy_pool(raw_image_data, sample_fn=sample_fn, hash_fn=hash_fn)
 
 
 def generate_true_random_number(

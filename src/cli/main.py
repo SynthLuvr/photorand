@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from src.cli.assess import handle_assess
+from src.cli.capture import handle_capture
 from src.cli.extract import handle_extract
 from src.cli.generate import handle_generate
 from src.cli.parser import create_parser
@@ -23,6 +24,8 @@ def main() -> None:
         handle_generate(args)
     elif command == "assess":
         handle_assess(args)
+    elif command == "capture":
+        handle_capture(args)
 
 
 if __name__ == "__main__":
