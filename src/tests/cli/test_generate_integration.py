@@ -10,6 +10,13 @@ import pytest
 
 from src.cli.main import main
 
+_DATA_DIR = Path(__file__).resolve().parent.parent / "data"
+_RAW_FILE = _DATA_DIR / "DSC02111.ARW"
+_HAS_RAW_DATA = _RAW_FILE.exists() and _RAW_FILE.stat().st_size > 1024
+_SKIP_RAW = pytest.mark.skipif(
+    not _HAS_RAW_DATA, reason="RAW test data unavailable (Git LFS pointer or missing)"
+)
+
 
 def run_cli_integration(
     args_list: list[str], capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
@@ -57,8 +64,8 @@ def test_extract_integration(
     image_file = base_dir / "data" / image_filename
 
     # Check if the file exists; if not, gracefully skip this specific iteration
-    if not image_file.exists():
-        pytest.skip(f"Test data file {image_filename} not found. Skipping test.")
+    if not image_file.exists() or image_file.stat().st_size < 1024:
+        pytest.skip(f"Test data file {image_filename} not available (missing or LFS pointer).")
 
     image_path = str(image_file)
 
@@ -104,6 +111,7 @@ def test_extract_integration(
     assert 0.0 <= f_val <= 1.0
 
 
+@_SKIP_RAW
 def test_generate_integration(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -210,6 +218,7 @@ def test_generate_integration(
     assert -10 <= int(out_neg_int.strip()) <= -5
 
 
+@_SKIP_RAW
 def test_generate_deterministic(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -235,6 +244,7 @@ def test_generate_deterministic(
     assert len(out1.splitlines()) == 10
 
 
+@_SKIP_RAW
 def test_generate_nondeterministic(
     capsys: pytest.CaptureFixture[str], monkeypatch: pytest.MonkeyPatch
 ) -> None:

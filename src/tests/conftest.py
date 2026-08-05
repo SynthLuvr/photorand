@@ -15,7 +15,10 @@ if TYPE_CHECKING:
 def example_image_path() -> str:
     """Provide absolute path to the realistic test image."""
     base_dir = Path(__file__).resolve().parent
-    return str(base_dir / "data" / "DSC02111.ARW")
+    path = base_dir / "data" / "DSC02111.ARW"
+    if not path.exists() or path.stat().st_size < 1024:
+        pytest.skip("RAW test data unavailable (Git LFS pointer or missing)")
+    return str(path)
 
 
 @pytest.fixture
