@@ -46,22 +46,12 @@ class PhotoRandSeed:
         duration: float = 5.0,
         camera_index: int = 0,
     ) -> PhotoRandSeed:
-        """Build a TRNG seed from a webcam capture instead of a RAW file.
+        """Build a seed from a webcam capture instead of a RAW file.
 
-        Captures temporal sensor noise for *duration* seconds and runs it
-        through the same entropy pipeline as a file-based seed.  Requires the
-        optional ``capture`` extra (``opencv-python-headless``).
-
-        Args:
-            duration: Capture length in seconds (default 5).
-            camera_index: Camera device index (default 0).
-
-        Returns:
-            A :class:`PhotoRandSeed` derived from the webcam capture.
+        Requires the optional ``capture`` extra (``opencv-python-headless``).
 
         Raises:
-            WebcamCaptureError: If capture cannot proceed (missing optional
-                dependency, no accessible camera, or too few frames).
+            WebcamCaptureError: If capture cannot proceed.
         """
         from src.low_level.capture import generate_from_webcam
 

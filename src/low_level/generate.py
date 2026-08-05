@@ -22,21 +22,9 @@ def condition_entropy_pool(
 ) -> tuple[bytes, bytes, EntropyAssessment]:
     """Sample, assess, and condition a raw sensor array into a TRNG seed.
 
-    This is the source-agnostic core of the pipeline: any ingest function that
-    yields a 2-D sensor array (a RAW file, a webcam capture, …) funnels through
-    here so the estimator and conditioner are applied identically everywhere.
-
-    Args:
-        raw_image_data: A 2-D array of sensor values from any ingest source.
-        sample_fn: Samples the array and returns a byte stream of raw entropy.
-            Defaults to :func:`sample_entropy_grid`.
-        hash_fn: Hashes the entropy pool into a fixed-length, uniformly
-            distributed byte string. Defaults to :func:`hash_entropy_pool`.
-
-    Returns:
-        ``(seed, entropy_pool, assessment)`` where *seed* is the 64-byte
-        SHA3-512 digest, *entropy_pool* is the raw pre-hash bytes, and
-        *assessment* is the :class:`EntropyAssessment`.
+    Source-agnostic pipeline core: any ingest function yielding a 2-D sensor
+    array funnels through here so the estimator and conditioner are applied
+    identically everywhere.
     """
     entropy_pool = sample_fn(raw_image_data)
     assessment = estimate_entropy(entropy_pool)

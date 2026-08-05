@@ -1,9 +1,4 @@
-"""Shared seed formatting/output helpers for the CLI.
-
-Both the file-based ``extract`` command and the webcam ``capture`` command
-produce a :class:`~src.high_level.seed.PhotoRandSeed` and emit it in the same
-set of output formats.  These helpers keep that formatting in one place.
-"""
+"""Shared seed formatting/output helpers for the CLI."""
 
 from __future__ import annotations
 
@@ -18,18 +13,6 @@ if TYPE_CHECKING:
 def format_seed_value(
     seed: PhotoRandSeed, fmt: str, args: argparse.Namespace
 ) -> str | int | float | bool:
-    """Format a seed according to the chosen output *fmt*.
-
-    Args:
-        seed: The seed to format.
-        fmt: One of ``hex``, ``int``, ``int-range``, ``float-range``,
-            ``bool``, ``float``.
-        args: Parsed CLI arguments (``--min``/``--max`` are read for the range
-            formats).
-
-    Returns:
-        The formatted value (type depends on *fmt*).
-    """
     if fmt == "hex":
         return seed.to_hex_string()
     if fmt == "int":
@@ -51,20 +34,11 @@ def emit_seed_output(
     out: str | None,
     binary: bool,
 ) -> None:
-    """Write the formatted value to stdout or a file.
-
-    Args:
-        seed: The seed (used for ``--binary`` raw-byte output).
-        value: The formatted value (ignored when *binary* is True).
-        out: Destination file path, or ``None`` for stdout.
-        binary: When True and *out* is set, write the raw seed bytes.
-    """
-    if out:
-        if binary:
-            with open(out, "wb") as f:
-                f.write(seed.to_bytes())
-        else:
-            with open(out, "w") as f:
-                f.write(str(value) + "\n")
-    else:
+    if out is None:
         print(value)
+        return
+
+    data = seed.to_bytes() if binary else f"{value}\n"
+    mode = "wb" if binary else "w"
+    with open(out, mode) as f:
+        f.write(data)

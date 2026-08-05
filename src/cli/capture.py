@@ -19,7 +19,6 @@ if TYPE_CHECKING:
 def _print_capture_summary(
     assessment: EntropyAssessment, duration: float, camera_index: int
 ) -> None:
-    """Print a concise capture/quality summary to stderr (keeps stdout clean)."""
     print(
         f"[capture] camera {camera_index} · {duration:g}s · status "
         f"{assessment.overall_status} · {assessment.total_entropy_bits:,.1f} bits "
@@ -29,26 +28,9 @@ def _print_capture_summary(
 
 
 def handle_capture(args: argparse.Namespace) -> None:
-    """Handle the 'capture' subcommand: extract entropy from a webcam.
-
-    Captures temporal sensor noise and runs it through the same entropy
-    assessment + conditioning as RAW files, then emits the seed in the chosen
-    format (mirroring ``extract``).
-
-    By default the command *refuses* to emit a seed when the entropy health
-    checks report ``FAIL`` (a faulty or silently-compressed source).  Pass
-    ``--allow-weak`` to emit regardless.  ``LOW`` / ``WARN`` statuses still emit,
-    with a warning.
-
-    Args:
-        args: Parsed CLI arguments.
-    """
+    """Extract entropy from a webcam and emit the seed in the chosen format."""
     duration: float = args.duration
     camera_index: int = args.camera
-    fmt: str = args.format
-    out: str | None = getattr(args, "out", None)
-    binary: bool = getattr(args, "binary", False)
-    allow_weak: bool = getattr(args, "allow_weak", False)
 
     try:
         seed = PhotoRandSeed.from_webcam(duration=duration, camera_index=camera_index)
@@ -62,7 +44,7 @@ def handle_capture(args: argparse.Namespace) -> None:
     assessment = seed.assessment
     _print_capture_summary(assessment, duration, camera_index)
 
-    if not assessment.passed_health_checks and not allow_weak:
+    if not assessment.passed_health_checks and not getattr(args, "allow_weak", False):
         logger.error(
             "Entropy health checks FAILED (status: FAIL). Refusing to emit a seed "
             "from a faulty source. Re-run with --allow-weak to emit anyway."
@@ -76,5 +58,5 @@ def handle_capture(args: argparse.Namespace) -> None:
             assessment.total_entropy_bits,
         )
 
-    value = format_seed_value(seed, fmt, args)
-    emit_seed_output(seed, value, out, binary)
+    value = format_seed_value(seed, args.format, args)
+    emit_seed_output(seed, value, getattr(args, "out", None), getattr(args, "binary", False))
