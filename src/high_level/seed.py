@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from src.logger import logger
-from src.low_level.generate import generate_true_random_number
+from src.low_level.generate import generate_with_assessment
+
+if TYPE_CHECKING:
+    from src.low_level.entropy import EntropyAssessment
 
 
 class PhotoRandSeed:
     """True Random Number Generator (TRNG) interface.
 
-    This class extracts physical entropy (photon and thermal noise) from a RAW
-    image file to create a pure, unbiased 64-byte seed. It serves as the primary
-    source of true entropy for cryptographic operations.
+    Extracts physical entropy from a RAW image to create a 64-byte seed.
+    Following NIST SP 800-90B, it also assesses the raw sampled pool before
+    SHA3-512 conditioning — accessible via the :attr:`assessment` property.
     """
 
     def __init__(self, image_path: str) -> None:
@@ -22,10 +27,20 @@ class PhotoRandSeed:
         """
         logger.info("[PhotoRandSeed] Extracting TRNG entropy from: %s", image_path)
 
-        # Reuse existing lower-level functions
-        self._raw_seed: bytes = generate_true_random_number(image_path)
+        self._raw_seed, _, self._assessment = generate_with_assessment(image_path)
 
-        logger.info("[PhotoRandSeed] Successfully generated 64-byte seed.")
+        logger.info(
+            "[PhotoRandSeed] Seed generated. Measured min-entropy: %.3f bits/symbol "
+            "(%.1f total bits). Status: %s.",
+            self._assessment.min_entropy,
+            self._assessment.total_entropy_bits,
+            self._assessment.overall_status,
+        )
+
+    @property
+    def assessment(self) -> EntropyAssessment:
+        """Return the NIST SP 800-90B entropy assessment of the sampled pool."""
+        return self._assessment
 
     def to_bytes(self) -> bytes:
         """Return the pure 64-byte seed.

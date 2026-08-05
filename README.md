@@ -24,7 +24,7 @@ A True Random Number Generator (TRNG) using raw camera sensor data to extract ph
 │   ├── __init__.py        # Package init (re-exports, version)
 │   ├── __main__.py        # CLI entry point (python -m src)
 │   ├── logger.py          # Central logger
-│   ├── low_level/         # Modular primitives (ingest, sample, hash, csprng)
+│   ├── low_level/         # Modular primitives (ingest, sample, entropy, hash, csprng)
 │   ├── high_level/        # OO abstractions (PhotoRandSeed, PhotoRandEngine)
 │   ├── cli/               # Command-line interface (parser, handlers)
 │   └── tests/             # Test suite organized by layer
@@ -93,10 +93,15 @@ seed = PhotoRandSeed("path/to/image.raw")
 print(seed.to_hex_string())
 print(seed.to_int())
 
-# 3. Roll a D100 using physical entropy (Rejection Sampling)
+# 3. Check the measured entropy quality (NIST SP 800-90B)
+print(f"Min-entropy: {seed.assessment.min_entropy:.3f} bits/symbol")
+print(f"Total:       {seed.assessment.total_entropy_bits:.1f} bits")
+print(f"Status:      {seed.assessment.overall_status}")
+
+# 4. Roll a D100 using physical entropy (Rejection Sampling)
 luck = seed.to_int_range(1, 100)
 
-# 4. Get a float in range
+# 5. Get a float in range
 prob = seed.to_float_range(0.5, 1.5)
 ```
 
@@ -133,17 +138,14 @@ python -m src extract hex --from path/to/raw_image.ARW
 # Roll a D20
 python -m src extract int-range --from path/to/raw_image.ARW --min 1 --max 20
 
-# Extract a float in range (e.g. -1.0 to 1.0)
-python -m src extract float-range --from path/to/raw_image.ARW --min -1.0 --max 1.0
-
 # Generate 5 random 16-char alphanumeric passwords
 python -m src generate string --from path/to/raw_image.ARW -n 5 -l 16 --charset alpha
 
-# Generate 10 boolean values
-python -m src generate bool --from path/to/raw_image.ARW -n 10
+# Measure the entropy quality of a RAW image's sensor noise
+python -m src assess --from path/to/raw_image.ARW
 
-# Generate 5 floats in a specific range
-python -m src generate float-range --from path/to/raw_image.ARW --min 0.5 --max 1.5 -n 5
+# Get the assessment as JSON (for scripting)
+python -m src assess --from path/to/raw_image.ARW --json
 ```
 
 *For more details, run:* `python -m src --help`
@@ -182,4 +184,4 @@ seed = generate_true_random_number("path/to/image.raw")  # returns bytes
 
 - **Blog Post**: [Physical Entropy with PhotoRand](https://www.daniel-ir.eu/blog/photorand)
 - **PyPI Package**: [photorand on PyPI](https://pypi.org/project/photorand/)
-- **Docs**: [Entropy Extraction](docs/entropy-extraction.md) · [Entropy Expansion](docs/entropy-expansion.md)
+- **Docs**: [Entropy Extraction](docs/entropy-extraction.md) · [Entropy Estimation](docs/entropy-estimation.md) · [Entropy Expansion](docs/entropy-expansion.md)

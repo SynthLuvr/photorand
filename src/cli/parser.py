@@ -115,6 +115,40 @@ def create_parser() -> tuple[
     )
 
     # ------------------------------------------------------------------
+    # 'assess' subcommand
+    # ------------------------------------------------------------------
+    assess_parser = subparsers.add_parser(
+        "assess",
+        help="Measure the entropy quality of a RAW image's sensor noise.",
+    )
+    assess_parser.add_argument(
+        "--from",
+        "--file",
+        "-f",
+        "--input",
+        dest="image_path",
+        required=True,
+        help="Path to the RAW image file (e.g., .ARW, .CR2).",
+    )
+    assess_parser.add_argument(
+        "--no-fpn",
+        action="store_true",
+        help="Disable fixed-pattern noise reduction (use raw LSBs without "
+        "subtracting row/column bias).",
+    )
+    assess_parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Output the assessment as JSON instead of a human-readable report.",
+    )
+    assess_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging.",
+    )
+
+    # ------------------------------------------------------------------
     # 'generate' subcommand
     # ------------------------------------------------------------------
     generate_parser = subparsers.add_parser(

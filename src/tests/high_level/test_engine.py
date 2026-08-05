@@ -7,12 +7,14 @@ from pathlib import Path
 
 from src.high_level.engine import PhotoRandEngine
 from src.high_level.seed import PhotoRandSeed
+from src.tests.conftest import requires_raw_data
 
 # Determine the path to the test data
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TEST_IMAGE = str(DATA_DIR / "DSC02111.ARW")
 
 
+@requires_raw_data
 class TestPhotoRandEngine:
     """Tests for the PhotoRandEngine (CSPRNG) class."""
 
