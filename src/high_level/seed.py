@@ -2,8 +2,13 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 from src.logger import logger
-from src.low_level.generate import generate_true_random_number
+from src.low_level.generate import generate_with_assessment
+
+if TYPE_CHECKING:
+    from src.low_level.entropy import EntropyAssessment
 
 
 class PhotoRandSeed:
@@ -12,6 +17,11 @@ class PhotoRandSeed:
     This class extracts physical entropy (photon and thermal noise) from a RAW
     image file to create a pure, unbiased 64-byte seed. It serves as the primary
     source of true entropy for cryptographic operations.
+
+    Following NIST SP 800-90B ("measure first, then condition"), the seed also
+    runs a full entropy assessment on the raw sampled pool *before* SHA3-512
+    conditioning.  The assessment is accessible via the :attr:`assessment`
+    property so callers can verify how much true entropy was measured.
     """
 
     def __init__(self, image_path: str) -> None:
@@ -22,10 +32,26 @@ class PhotoRandSeed:
         """
         logger.info("[PhotoRandSeed] Extracting TRNG entropy from: %s", image_path)
 
-        # Reuse existing lower-level functions
-        self._raw_seed: bytes = generate_true_random_number(image_path)
+        # Run the full pipeline: ingest → sample → assess → hash.
+        self._raw_seed, self._entropy_pool, self._assessment = generate_with_assessment(image_path)
 
-        logger.info("[PhotoRandSeed] Successfully generated 64-byte seed.")
+        logger.info(
+            "[PhotoRandSeed] Seed generated. Measured min-entropy: %.3f bits/symbol "
+            "(%.1f total bits). Status: %s.",
+            self._assessment.min_entropy,
+            self._assessment.total_entropy_bits,
+            self._assessment.overall_status,
+        )
+
+    @property
+    def assessment(self) -> EntropyAssessment:
+        """Return the NIST SP 800-90B entropy assessment of the sampled pool.
+
+        This tells you *how much* true entropy was measured — not just that
+        the hash output passes statistical tests (which it always will,
+        even on low-entropy input).
+        """
+        return self._assessment
 
     def to_bytes(self) -> bytes:
         """Return the pure 64-byte seed.
