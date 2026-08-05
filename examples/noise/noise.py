@@ -61,8 +61,8 @@ def extract_noise_map(
 		print(f"Physical entropy map saved to: {output_path}")
 
 # Usage: Visualizing the 'Seed' of your TRNG
-extract_noise_map('tests/data/DSC03088.ARW', 'examples/noise/entropy_visualized.png')
-extract_noise_map('tests/data/DSC03089.ARW', 'examples/noise/entropy_visualized_2.png')
+extract_noise_map('src/tests/data/DSC03088.ARW', 'examples/noise/entropy_visualized.png')
+extract_noise_map('src/tests/data/DSC03089.ARW', 'examples/noise/entropy_visualized_2.png')
 
 def create_spectral_entropy_diff(
 	path_a: str,

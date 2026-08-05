@@ -2,59 +2,89 @@
 
 [![PyPI version](https://img.shields.io/pypi/v/photorand)](https://pypi.org/project/photorand/)
 
-
 A True Random Number Generator (TRNG) using raw camera sensor data to extract physical entropy.
 
 ![Architecture](https://res.cloudinary.com/dhnsmw569/image/upload/photorand_dtj6xn.webp)
 
+## Tech Stack
+
+| Tool | Purpose |
+|------|---------|
+| [uv](https://docs.astral.sh/uv/) | Package manager & virtual environment |
+| [Python](https://www.python.org) | Language (≥ 3.14, managed by uv) |
+| [Pyright](https://github.com/microsoft/pyright) | Static type checking (strict mode) |
+| [Ruff](https://docs.astral.sh/ruff/) | Linter and formatter |
+| [pytest](https://docs.pytest.org/) | Test runner |
+| [Hatch](https://hatch.pypa.io/) | Build backend |
+
 ## Project Structure
 
-- `src/photorand/` - Main package source code.
-	- `low_level/` - Modular primitives (ingest, sample, hash, csprng).
-	- `high_level/` - Clean OO abstractions (`PhotoRandSeed`, `PhotoRandEngine`).
-	- `cli/` - Command-line interface logic.
-- `docs/` - Technical and scientific documentation detailing the [entropy extraction](docs/entropy-extraction.md) and [entropy expansion](docs/entropy-expansion.md) mechanisms.
-- `tests/` - Comprehensive test suite organized by architectural layer.
-- `examples/` - Code samples, useful scripts
-
-## Installation
-
-This project is available on PyPI:
-
-```bash
-pip install photorand
+```
+├── src/
+│   ├── __init__.py        # Package init (re-exports, version)
+│   ├── __main__.py        # CLI entry point (python -m src)
+│   ├── logger.py          # Central logger
+│   ├── low_level/         # Modular primitives (ingest, sample, hash, csprng)
+│   ├── high_level/        # OO abstractions (PhotoRandSeed, PhotoRandEngine)
+│   ├── cli/               # Command-line interface (parser, handlers)
+│   └── tests/             # Test suite organized by layer
+├── docs/                  # Technical documentation
+├── examples/              # Code samples and useful scripts
+├── pyproject.toml         # Project config, deps, tool settings
+└── AGENTS.md              # AI agent instructions
 ```
 
-### From Source (Development)
+## Quick Start
 
-This project uses `pyproject.toml` for managing dependencies.
+```bash
+uv sync                      # install dependencies
+uv sync --all-extras         # also install dev deps (pytest, ruff, pyright)
 
-1. **Create and activate a virtual environment** (recommended):
-	```bash
-	python -m venv .venv
-	source .venv/bin/activate  # On Windows, use `.venv\Scripts\activate`
-	```
+uv run pytest                # run unit tests
+```
 
-2. **Install the project in editable mode**:
-	```bash
-	pip install -e .
-	# or this one for also installing the dev tools
-	pip install -e ".[dev]"
-	```
+## Commands
 
-Note: you can use `photorand` from the cli using `python -m photorand` instead of just `photorand`
+### Type Check
+
+```bash
+uv run pyright src/          # strict type checking
+```
+
+### Lint
+
+```bash
+uv run ruff check src/       # lint all files
+```
+
+### Format
+
+```bash
+uv run ruff format src/      # format all files (writes changes)
+uv run ruff format --check src/  # check formatting without writing
+uv run ruff check --fix src/ # auto-fix lint issues
+```
+
+### Test
+
+```bash
+uv run pytest                # run all tests
+```
 
 ---
+
+## Usage
 
 ### 1. High-Level Classes (Recommended)
 
 The high-level classes provide a stateful and convenient interface for both TRNG and CSPRNG operations.
 
 #### `PhotoRandSeed` (TRNG)
+
 Encapsulates the process of extracting entropy from a RAW image. It is perfect for generating one-off secure seeds, keys, or dice rolls directly from physical noise.
 
 ```python
-from photorand import PhotoRandSeed
+from src import PhotoRandSeed
 
 # 1. Extract entropy from a RAW image
 seed = PhotoRandSeed("path/to/image.raw")
@@ -71,10 +101,11 @@ prob = seed.to_float_range(0.5, 1.5)
 ```
 
 #### `PhotoRandEngine` (CSPRNG)
+
 An infinite stream generator powered by ChaCha20, seeded by a `PhotoRandSeed`. It handles salting (Time + PID) automatically to ensure that even consecutive runs with the same image produce unique streams.
 
 ```python
-from photorand import PhotoRandEngine
+from src import PhotoRandEngine
 
 # 1. Initialize from image or existing Seed object
 engine = PhotoRandEngine("path/to/image.raw")
@@ -88,7 +119,7 @@ coin_flip = engine.next_bool()
 probability = engine.next_float()
 
 # 3. Batch generation
-multiple_passwords = engine.generate_batch(engine.next_string, count=5, length=16)
+multiple_passwords = engine.generate_batch(engine.next_string, n=5, length=16)
 ```
 
 #### CLI (Command Line Interface)
@@ -97,28 +128,25 @@ The package includes a powerful CLI to use these classes directly from your term
 
 ```bash
 # Extract 64-byte photorand seed (hex)
-photorand extract hex --from path/to/raw_image.ARW
+python -m src extract hex --from path/to/raw_image.ARW
 
 # Roll a D20
-photorand extract int-range --from path/to/raw_image.ARW --min 1 --max 20
+python -m src extract int-range --from path/to/raw_image.ARW --min 1 --max 20
 
 # Extract a float in range (e.g. -1.0 to 1.0)
-photorand extract float-range --from path/to/raw_image.ARW --min -1.0 --max 1.0
+python -m src extract float-range --from path/to/raw_image.ARW --min -1.0 --max 1.0
 
 # Generate 5 random 16-char alphanumeric passwords
-photorand generate string --from path/to/raw_image.ARW -n 5 -l 16 --charset alpha
-
-# Extract a floating point number between 0 and 1
-photorand extract float --from path/to/raw_image.ARW
+python -m src generate string --from path/to/raw_image.ARW -n 5 -l 16 --charset alpha
 
 # Generate 10 boolean values
-photorand generate bool --from path/to/raw_image.ARW -n 10
+python -m src generate bool --from path/to/raw_image.ARW -n 10
 
 # Generate 5 floats in a specific range
-photorand generate float-range --from path/to/raw_image.ARW --min 0.5 --max 1.5 -n 5
+python -m src generate float-range --from path/to/raw_image.ARW --min 0.5 --max 1.5 -n 5
 ```
 
-*For more details, run:* `photorand --help`
+*For more details, run:* `python -m src --help`
 
 ---
 
@@ -127,9 +155,9 @@ photorand generate float-range --from path/to/raw_image.ARW --min 0.5 --max 1.5 
 For maximum control or research, you can use the modular primitives directly.
 
 ```python
-from photorand.low_level import ingest_raw_image
-from photorand.low_level import sample_entropy_grid
-from photorand.low_level import hash_entropy_pool
+from src.low_level import ingest_raw_image
+from src.low_level import sample_entropy_grid
+from src.low_level import hash_entropy_pool
 
 # 1. Ingest raw sensor data
 raw_data = ingest_raw_image("path/to/image.raw")
@@ -142,28 +170,16 @@ seed_bytes = hash_entropy_pool(entropy_pool)
 ```
 
 Alternatively, use the functional pipeline. It accepts custom functions for each part of the algorithm (ingest_fn, sample_fn and hash_fn) although we already provide the values as default parameters:
+
 ```python
-from photorand.low_level import generate_true_random_number
-seed = generate_true_random_number("path/to/image.raw") # returns bytes
+from src.low_level import generate_true_random_number
+seed = generate_true_random_number("path/to/image.raw")  # returns bytes
 ```
 
 ---
-
-## Development
-
-### Running the Tests
-```bash
-python -m pytest -v --log-cli-level=INFO
-# or just this one to skip logs
-pytest
-```
-
-### Formatting
-```bash
-ruff check --fix src tests examples
-```
 
 ## Resources
 
 - **Blog Post**: [Physical Entropy with PhotoRand](https://www.daniel-ir.eu/blog/photorand)
 - **PyPI Package**: [photorand on PyPI](https://pypi.org/project/photorand/)
+- **Docs**: [Entropy Extraction](docs/entropy-extraction.md) · [Entropy Expansion](docs/entropy-expansion.md)

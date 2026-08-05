@@ -1,12 +1,12 @@
 import os
 
-from photorand import PhotoRandEngine, PhotoRandSeed
+from src import PhotoRandEngine, PhotoRandSeed
 
 
 def main():
 	# Path to a sample RAW image (using project test data)
 	project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-	image_path = os.path.join(project_root, "tests", "data", "DSC02111.ARW")
+	image_path = os.path.join(project_root, "src", "tests", "data", "DSC02111.ARW")
 
 	if not os.path.exists(image_path):
 		print(f"Error: Could not find sample image at {image_path}")

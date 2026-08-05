@@ -14,7 +14,7 @@ To run these examples, you first need to install the `photorand` package in your
 From the root of the project, run:
 
 ```bash
-pip install -e .
+uv sync --all-extras  # was: pip install -e .
 ```
 
 This will link the `src/` directory to your environment, making the `photorand` module available.
@@ -41,4 +41,4 @@ bash examples/cli_example.sh
 
 ## Troubleshooting
 
-If you encounter `ModuleNotFoundError: No module named 'photorand'`, ensure you have activated your virtual environment and run `pip install -e .` as described above.
+If you encounter `ModuleNotFoundError: No module named 'photorand'`, ensure you have activated your virtual environment and run `uv sync --all-extras  # was: pip install -e .` as described above.

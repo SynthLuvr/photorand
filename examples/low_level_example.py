@@ -1,15 +1,15 @@
 import os
 
-from photorand.low_level import sample_entropy_grid
-from photorand.low_level.csprng import expand_entropy_chacha20
-from photorand.low_level.hash import hash_entropy_pool
-from photorand.low_level.ingest import ingest_raw_image
+from src.low_level import sample_entropy_grid
+from src.low_level.csprng import expand_entropy_chacha20
+from src.low_level.hash import hash_entropy_pool
+from src.low_level.ingest import ingest_raw_image
 
 
 def main():
 	# 1. Path to a sample RAW image (using project test data)
 	project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-	image_path = os.path.join(project_root, "tests", "data", "DSC02111.ARW")
+	image_path = os.path.join(project_root, "src", "tests", "data", "DSC02111.ARW")
 
 	if not os.path.exists(image_path):
 		print(f"Error: Could not find sample image at {image_path}")
