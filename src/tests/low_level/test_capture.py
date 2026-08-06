@@ -28,12 +28,18 @@ class _FakeVideoCapture:
     """Mimics the handful of cv2.VideoCapture methods capture_webcam_noise uses."""
 
     def __init__(
-        self, frames: list[np.ndarray], *, open_ok: bool = True, set_ok: bool = True
+        self,
+        frames: list[np.ndarray],
+        *,
+        open_ok: bool = True,
+        set_ok: bool = True,
+        unsupported_fourccs: set[int] | None = None,
     ) -> None:
         self._frames = list(frames)
         self._i = 0
         self._open_ok = open_ok
         self._set_ok = set_ok
+        self._unsupported_fourccs = unsupported_fourccs or set()
         self.released = False
         self.requested_index: int | None = None
         self.set_calls: list[tuple[int, int]] = []
@@ -43,6 +49,8 @@ class _FakeVideoCapture:
 
     def set(self, prop: int, value: int) -> bool:
         self.set_calls.append((prop, value))
+        if prop == _FakeCV2.CAP_PROP_FOURCC and value in self._unsupported_fourccs:
+            return False
         return self._set_ok
 
     def read(self) -> tuple[bool, np.ndarray | None]:
@@ -64,7 +72,9 @@ class _FakeCV2:
         self._capture = capture
 
     def VideoWriter_fourcc(self, *_chars: str) -> int:
-        return 0
+        # Encode like real cv2 (little-endian char codes) so tests can tell
+        # formats such as MJPG apart from YUYV.
+        return sum(ord(c) << (8 * i) for i, c in enumerate(_chars))
 
     def VideoCapture(self, index: int) -> _FakeVideoCapture:
         self._capture.requested_index = index
@@ -95,11 +105,22 @@ def _install_fake_cv2(
     *,
     open_ok: bool = True,
     set_ok: bool = True,
+    unsupported_fourccs: set[int] | None = None,
 ) -> _FakeVideoCapture:
     """Point capture._import_cv2 at a fake cv2 backed by *frames*."""
-    capture = _FakeVideoCapture(frames, open_ok=open_ok, set_ok=set_ok)
+    capture = _FakeVideoCapture(
+        frames,
+        open_ok=open_ok,
+        set_ok=set_ok,
+        unsupported_fourccs=unsupported_fourccs,
+    )
     monkeypatch.setattr(cap, "_import_cv2", lambda: _FakeCV2(capture))
     return capture
+
+
+def _fourcc(label: str) -> int:
+    """Encode a FOURCC label the way the (fake and real) cv2 does."""
+    return sum(ord(c) << (8 * i) for i, c in enumerate(label))
 
 
 def _gray(frame: np.ndarray) -> np.ndarray:
@@ -215,11 +236,26 @@ class TestCaptureWebcamNoise:
 
         assert capture.released
 
-    def test_requests_yuyv_fourcc(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_negotiates_mjpg_first(self, monkeypatch: pytest.MonkeyPatch) -> None:
         capture = _install_fake_cv2(monkeypatch, _noise_frames(20))
         capture_webcam_noise(duration=5.0)
 
-        assert (_FakeCV2.CAP_PROP_FOURCC, 0) in capture.set_calls
+        fourcc_values = [v for p, v in capture.set_calls if p == _FakeCV2.CAP_PROP_FOURCC]
+        # MJPG is preferred and accepted, so YUYV is never tried.
+        assert _fourcc("MJPG") in fourcc_values
+        assert _fourcc("YUYV") not in fourcc_values
+
+    def test_falls_back_to_yuyv_when_mjpg_unsupported(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        capture = _install_fake_cv2(
+            monkeypatch, _noise_frames(20), unsupported_fourccs={_fourcc("MJPG")}
+        )
+        capture_webcam_noise(duration=5.0)
+
+        fourcc_values = [v for p, v in capture.set_calls if p == _FakeCV2.CAP_PROP_FOURCC]
+        assert _fourcc("MJPG") in fourcc_values
+        assert _fourcc("YUYV") in fourcc_values
 
     def test_camera_index_passed_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
         capture = _install_fake_cv2(monkeypatch, _noise_frames(20))

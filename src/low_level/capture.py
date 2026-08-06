@@ -31,6 +31,11 @@ if TYPE_CHECKING:
 
 _MAX_READ_FAILURES = 10
 _WARMUP_FRAMES = 5
+# Pixel formats negotiated in preference order. MJPG is near-universal and
+# OpenCV decodes it into valid BGR; requesting YUYV from an MJPG-only sensor
+# instead yields a corrupt, near-flat green frame with no usable entropy, so
+# MJPG is tried first and YUYV is retained as a fallback.
+_PREFERRED_FOURCCS: tuple[str, ...] = ("MJPG", "YUYV")
 
 
 class WebcamCaptureError(RuntimeError):
@@ -52,6 +57,46 @@ def _import_cv2() -> Any:
             "    uv sync --extra capture\n"
             "    pip install 'photorand[capture]'"
         ) from exc
+
+
+def _negotiate_pixel_format(cap: Any, cv2: Any, camera_index: int) -> str | None:
+    """Select a pixel format the camera decodes into valid frames.
+
+    MJPG is preferred: it is supported by virtually every webcam and OpenCV
+    decodes it into valid BGR.  Many laptop sensors advertise *only* MJPG, yet
+    OpenCV's V4L2 backend defaults to YUYV — requesting YUYV from such a sensor
+    yields a corrupt, near-flat green frame that carries no entropy, so the
+    entropy health check then fails.  YUYV is kept as a fallback for the rare
+    sensor that lacks MJPG.
+
+    Args:
+        cap: An open ``cv2.VideoCapture``.
+        cv2: The ``cv2`` module.
+        camera_index: Camera index, used only for log messages.
+
+    Returns:
+        The label of the negotiated format, or ``None`` if the backend
+        accepted none of the candidates (the camera default is then used).
+    """
+    chosen: str | None = None
+    for label in _PREFERRED_FOURCCS:
+        fourcc = cv2.VideoWriter_fourcc(*label)
+        if cap.set(cv2.CAP_PROP_FOURCC, fourcc):
+            chosen = label
+            break
+    if chosen is None:
+        logger.warning(
+            "[capture] Camera %d accepted none of %s; using its default format.",
+            camera_index,
+            ", ".join(_PREFERRED_FOURCCS),
+        )
+    else:
+        logger.info(
+            "[capture] Camera %d negotiated pixel format %s.",
+            camera_index,
+            chosen,
+        )
+    return chosen
 
 
 def capture_webcam_noise(
@@ -77,15 +122,7 @@ def capture_webcam_noise(
             "Check that the device is connected and not in use."
         )
 
-    # Best-effort: request uncompressed YUYV. The backend may silently ignore
-    # this (notably Windows CAP_DSHOW); the entropy estimator is the safety net
-    # for compressed input.
-    fourcc: Any = cv2.VideoWriter_fourcc("Y", "U", "Y", "V")
-    if not cap.set(cv2.CAP_PROP_FOURCC, fourcc):
-        logger.warning(
-            "[capture] Backend would not commit to YUYV; relying on the "
-            "entropy estimator to reject silently-compressed frames."
-        )
+    _negotiate_pixel_format(cap, cv2, camera_index)
 
     try:
         for _ in range(_WARMUP_FRAMES):
