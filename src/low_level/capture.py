@@ -1,7 +1,9 @@
 """Webcam entropy capture — harvest temporal sensor noise via frame differencing.
 
 Optional entropy source depending on ``opencv-python-headless`` (the ``capture``
-extra).  Imported lazily so the core package works without it.
+extra).  ``cv2`` is imported lazily (at call time, not module load) so that
+``import src`` never requires the extra — see the ADR
+(``docs/webcam-capture-library.md``) for the full rationale.
 
 Consecutive-frame differencing cancels the static scene and fixed-pattern noise,
 leaving the stochastic read/shot-noise floor that constitutes genuine entropy.
