@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.logger import logger
+from src.low_level.capture import generate_from_webcam
 from src.low_level.generate import generate_with_assessment
 
 if TYPE_CHECKING:
@@ -46,15 +47,12 @@ class PhotoRandSeed:
         duration: float = 5.0,
         camera_index: int = 0,
     ) -> PhotoRandSeed:
-        """Build a seed from a webcam capture instead of a RAW file.
-
-        Uses the ``opencv-python-headless`` capture backend.
+        """Build a seed from a live webcam capture instead of a RAW file.
 
         Raises:
-            WebcamCaptureError: If capture cannot proceed.
+            WebcamCaptureError: If the camera cannot be opened or yields too few
+                usable frames.
         """
-        from src.low_level.capture import generate_from_webcam
-
         logger.info(
             "[PhotoRandSeed] Extracting TRNG entropy from webcam %d (%.1fs)",
             camera_index,
