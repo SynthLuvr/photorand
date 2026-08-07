@@ -105,6 +105,18 @@ luck = seed.to_int_range(1, 100)
 prob = seed.to_float_range(0.5, 1.5)
 ```
 
+> **Webcam source:** You can also derive a seed from a live webcam
+> capture instead of a RAW file. It runs through the exact same entropy
+> pipeline:
+>
+> ```python
+> from src import PhotoRandSeed
+>
+> seed = PhotoRandSeed.from_webcam(duration=5.0, camera_index=0)
+> print(seed.to_hex_string())
+> print(f"Status: {seed.assessment.overall_status}")
+> ```
+
 #### `PhotoRandEngine` (CSPRNG)
 
 An infinite stream generator powered by ChaCha20, seeded by a `PhotoRandSeed`. It handles salting (Time + PID) automatically to ensure that even consecutive runs with the same image produce unique streams.
@@ -167,6 +179,25 @@ uv run photorand assess --from path/to/raw_image.ARW
 # Machine-readable JSON output (great for scripting)
 uv run photorand assess --from path/to/raw_image.ARW --json
 ```
+
+**`capture`** — extract entropy from a webcam:
+
+```bash
+# Capture 5 seconds of webcam sensor noise and emit the 64-byte seed as hex
+uv run photorand capture hex --duration 5
+
+# Roll a D20 from a 3-second capture on camera index 1
+uv run photorand capture int-range --duration 3 --camera 1 --min 1 --max 20
+
+# Save the raw seed bytes to a file
+uv run photorand capture hex -o seed.bin --binary
+```
+
+The captured data flows through the same NIST SP 800-90B assessment + SHA3-512
+conditioning as RAW files, and a one-line quality summary is printed to stderr.
+By default the command refuses to emit a seed when the entropy health checks
+report `FAIL` (a faulty or silently-compressed source); pass `--allow-weak` to
+override.
 
 *For the full list of commands and options, run:* `uv run photorand --help`
 

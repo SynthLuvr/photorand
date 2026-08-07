@@ -4,8 +4,8 @@
 |---|---|
 | **Status** | Accepted |
 | **Date** | 2026-08-05 |
-| **Decision** | Adopt `opencv-python-headless` as the primary dependency for the webcam entropy source. |
-| **Scope** | New optional capture backend (`low_level/capture.py`); does not alter the existing RAW-file path. |
+| **Decision** | Adopt `opencv-python-headless` as a required core dependency for the webcam entropy source. |
+| **Scope** | New capture backend (`low_level/capture.py`); does not alter the existing RAW-file path. |
 
 ## Context
 
@@ -55,18 +55,25 @@ non-negotiable filter that eliminated candidates that would otherwise look reaso
 
 ## Decision
 
-We will use **`opencv-python-headless`** as the primary capture dependency, declared as an
-optional extra:
+We will use **`opencv-python-headless`** as a required core dependency:
 
 ```toml
-[project.optional-dependencies]
-capture = ["opencv-python-headless>=5.0.0"]
+[project]
+dependencies = [
+    "rawpy>=0.26.1",
+    "numpy>=2.0.0",
+    "cryptography>=46.0.0",
+    "opencv-python-headless>=5.0.0",
+]
 ```
 
-The capture code will force an uncompressed format and use frame differencing (subtracting
-two near-simultaneous frames of a static/dark scene) to cancel static scene content and
-fixed-pattern noise, leaving the temporal noise floor. The existing NIST SP 800-90B
-`estimate_entropy()` then gates the result exactly as it does for RAW files.
+The capture code will force an uncompressed format and use frame differencing to cancel
+static scene content and fixed-pattern noise, leaving the temporal noise floor. Rather
+than differencing a single pair of frames, it accumulates the absolute difference between
+each consecutive frame pair over the full capture duration — more frames yield more noise
+data, and the resulting accumulation is a 2-D array the sampler consumes directly. The
+existing NIST SP 800-90B `estimate_entropy()` then gates the quality exactly as it does
+for RAW files.
 
 ## Rationale
 

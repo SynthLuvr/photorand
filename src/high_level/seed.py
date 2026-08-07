@@ -5,6 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from src.logger import logger
+from src.low_level.capture import generate_from_webcam
 from src.low_level.generate import generate_with_assessment
 
 if TYPE_CHECKING:
@@ -18,6 +19,9 @@ class PhotoRandSeed:
     Following NIST SP 800-90B, it also assesses the raw sampled pool before
     SHA3-512 conditioning — accessible via the :attr:`assessment` property.
     """
+
+    _raw_seed: bytes
+    _assessment: EntropyAssessment
 
     def __init__(self, image_path: str) -> None:
         """Initialize the TRNG by ingesting a RAW image and extracting entropy.
@@ -36,6 +40,39 @@ class PhotoRandSeed:
             self._assessment.total_entropy_bits,
             self._assessment.overall_status,
         )
+
+    @classmethod
+    def from_webcam(
+        cls,
+        duration: float = 5.0,
+        camera_index: int = 0,
+    ) -> PhotoRandSeed:
+        """Build a seed from a live webcam capture instead of a RAW file.
+
+        Raises:
+            WebcamCaptureError: If the camera cannot be opened or yields too few
+                usable frames.
+        """
+        logger.info(
+            "[PhotoRandSeed] Extracting TRNG entropy from webcam %d (%.1fs)",
+            camera_index,
+            duration,
+        )
+        raw_seed, _pool, assessment = generate_from_webcam(
+            duration=duration, camera_index=camera_index
+        )
+
+        obj = cls.__new__(cls)
+        obj._raw_seed = raw_seed
+        obj._assessment = assessment
+        logger.info(
+            "[PhotoRandSeed] Webcam seed generated. Measured min-entropy: %.3f bits/symbol "
+            "(%.1f total bits). Status: %s.",
+            assessment.min_entropy,
+            assessment.total_entropy_bits,
+            assessment.overall_status,
+        )
+        return obj
 
     @property
     def assessment(self) -> EntropyAssessment:
