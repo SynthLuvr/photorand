@@ -6,8 +6,6 @@ real camera is required.
 
 from __future__ import annotations
 
-import importlib
-
 import numpy as np
 import pytest
 
@@ -15,7 +13,7 @@ from src.low_level import capture as cap
 from src.low_level.capture import WebcamCaptureError, capture_webcam_noise, generate_from_webcam
 from src.low_level.entropy import EntropyAssessment
 
-# This test file mocks package internals (capture._import_cv2 / _WARMUP_FRAMES).
+# This test file mocks package internals (capture.cv2 / _WARMUP_FRAMES).
 # pyright: reportPrivateUsage=false
 
 
@@ -66,15 +64,9 @@ class _FakeVideoCapture:
 
 class _FakeCV2:
     CAP_PROP_FOURCC = 6
-    COLOR_BGR2GRAY = 8
 
     def __init__(self, capture: _FakeVideoCapture) -> None:
         self._capture = capture
-
-    def VideoWriter_fourcc(self, *_chars: str) -> int:
-        # Encode like real cv2 (little-endian char codes) so tests can tell
-        # formats such as MJPG apart from YUYV.
-        return sum(ord(c) << (8 * i) for i, c in enumerate(_chars))
 
     def VideoCapture(self, index: int) -> _FakeVideoCapture:
         self._capture.requested_index = index
@@ -107,14 +99,14 @@ def _install_fake_cv2(
     set_ok: bool = True,
     unsupported_fourccs: set[int] | None = None,
 ) -> _FakeVideoCapture:
-    """Point capture._import_cv2 at a fake cv2 backed by *frames*."""
+    """Inject a fake cv2 module (backed by *frames*) into the capture module."""
     capture = _FakeVideoCapture(
         frames,
         open_ok=open_ok,
         set_ok=set_ok,
         unsupported_fourccs=unsupported_fourccs,
     )
-    monkeypatch.setattr(cap, "_import_cv2", lambda: _FakeCV2(capture))
+    monkeypatch.setattr(cap, "cv2", _FakeCV2(capture))
     return capture
 
 
@@ -137,47 +129,6 @@ def _reference_accumulator(frames: list[np.ndarray]) -> np.ndarray:
         acc = diff.copy() if acc is None else acc + diff
     assert acc is not None
     return acc
-
-
-# ---------------------------------------------------------------------------
-# _import_cv2
-# ---------------------------------------------------------------------------
-
-
-class TestImportCV2:
-    def test_missing_raises_helpful_error(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        real = importlib.import_module
-
-        def fake(name: str, package: str | None = None) -> object:
-            if name == "cv2":
-                raise ModuleNotFoundError("No module named 'cv2'")
-            return real(name, package)
-
-        monkeypatch.setattr(importlib, "import_module", fake)
-
-        with pytest.raises(WebcamCaptureError, match="opencv-python-headless"):
-            cap._import_cv2()
-
-    def test_returns_module_when_available(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        sentinel = object()
-
-        def fake(name: str, package: str | None = None) -> object:
-            return sentinel
-
-        monkeypatch.setattr(importlib, "import_module", fake)
-        assert cap._import_cv2() is sentinel
-
-    def test_error_mentions_install_commands(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        def raises(name: str, package: str | None = None) -> object:
-            raise ModuleNotFoundError("No module named 'cv2'")
-
-        monkeypatch.setattr(importlib, "import_module", raises)
-
-        with pytest.raises(WebcamCaptureError) as exc_info:
-            cap._import_cv2()
-        message = str(exc_info.value)
-        assert "uv sync --extra capture" in message
-        assert "pip install" in message
 
 
 # ---------------------------------------------------------------------------

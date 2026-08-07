@@ -39,7 +39,6 @@ A True Random Number Generator (TRNG) using raw camera sensor data to extract ph
 ```bash
 uv sync                      # install dependencies
 uv sync --all-extras         # also install dev deps (pytest, ruff, pyright)
-uv sync --extra capture      # also enable the optional webcam source (OpenCV)
 
 uv run pytest                # run unit tests
 ```
@@ -106,9 +105,9 @@ luck = seed.to_int_range(1, 100)
 prob = seed.to_float_range(0.5, 1.5)
 ```
 
-> **Webcam source (optional):** You can also derive a seed from a live webcam
-> capture instead of a RAW file. It requires the optional `capture` extra
-> (`uv sync --extra capture`) and runs through the exact same entropy pipeline:
+> **Webcam source:** You can also derive a seed from a live webcam
+> capture instead of a RAW file. It runs through the exact same entropy
+> pipeline:
 >
 > ```python
 > from src import PhotoRandSeed
@@ -181,7 +180,7 @@ uv run photorand assess --from path/to/raw_image.ARW
 uv run photorand assess --from path/to/raw_image.ARW --json
 ```
 
-**`capture`** — extract entropy from a webcam (requires the optional `capture` extra: `uv sync --extra capture`):
+**`capture`** — extract entropy from a webcam:
 
 ```bash
 # Capture 5 seconds of webcam sensor noise and emit the 64-byte seed as hex

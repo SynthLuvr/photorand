@@ -48,7 +48,7 @@ class PhotoRandSeed:
     ) -> PhotoRandSeed:
         """Build a seed from a webcam capture instead of a RAW file.
 
-        Requires the optional ``capture`` extra (``opencv-python-headless``).
+        Uses the ``opencv-python-headless`` capture backend.
 
         Raises:
             WebcamCaptureError: If capture cannot proceed.

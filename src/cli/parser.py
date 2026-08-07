@@ -120,7 +120,7 @@ def create_parser() -> tuple[
     _add_format_subparsers(extract_parser, extract_common)
 
     # ------------------------------------------------------------------
-    # 'capture' subcommand (optional webcam source)
+    # 'capture' subcommand (webcam source)
     # ------------------------------------------------------------------
     capture_common = argparse.ArgumentParser(add_help=False)
     capture_common.add_argument(
@@ -161,7 +161,7 @@ def create_parser() -> tuple[
 
     capture_parser = subparsers.add_parser(
         "capture",
-        help="Capture entropy from a webcam (requires the 'capture' extra).",
+        help="Capture entropy from a webcam.",
     )
     _add_format_subparsers(capture_parser, capture_common)
 

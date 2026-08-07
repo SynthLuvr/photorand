@@ -4,8 +4,8 @@
 |---|---|
 | **Status** | Accepted |
 | **Date** | 2026-08-05 |
-| **Decision** | Adopt `opencv-python-headless` as the primary dependency for the webcam entropy source. |
-| **Scope** | New optional capture backend (`low_level/capture.py`); does not alter the existing RAW-file path. |
+| **Decision** | Adopt `opencv-python-headless` as a required core dependency for the webcam entropy source. |
+| **Scope** | New capture backend (`low_level/capture.py`); does not alter the existing RAW-file path. |
 
 ## Context
 
@@ -55,12 +55,16 @@ non-negotiable filter that eliminated candidates that would otherwise look reaso
 
 ## Decision
 
-We will use **`opencv-python-headless`** as the primary capture dependency, declared as an
-optional extra:
+We will use **`opencv-python-headless`** as a required core dependency:
 
 ```toml
-[project.optional-dependencies]
-capture = ["opencv-python-headless>=5.0.0"]
+[project]
+dependencies = [
+    "rawpy>=0.26.1",
+    "numpy>=2.0.0",
+    "cryptography>=46.0.0",
+    "opencv-python-headless>=5.0.0",
+]
 ```
 
 The capture code will force an uncompressed format and use frame differencing to cancel
@@ -70,33 +74,6 @@ each consecutive frame pair over the full capture duration — more frames yield
 data, and the resulting accumulation is a 2-D array the sampler consumes directly. The
 existing NIST SP 800-90B `estimate_entropy()` then gates the quality exactly as it does
 for RAW files.
-
-### Runtime isolation — why the import is lazy, not top-level
-
-Declaring OpenCV as an optional extra is necessary but not sufficient on its own.
-The package's top-level `__init__.py` re-exports the capture symbols:
-
-```python
-# src/__init__.py
-from src.low_level.capture import WebcamCaptureError, capture_webcam_noise, generate_from_webcam
-```
-
-So `import src` transitively imports `capture.py`. Had that module used a top-level
-`import cv2`, the import would fire during *every* `import src` and fail hard with
-`ModuleNotFoundError` on any system lacking the `capture` extra — making the **entire**
-package unimportable, even for users who only ever touch the RAW-file path.
-
-To break that transitive chain, `cv2` is imported **lazily** (at call time, not module
-load) via `importlib`, inside `capture.py::_import_cv2()`. `capture.py`'s own top-level
-imports are limited to `numpy` and internal `src.*` modules — all core dependencies — so
-the module and its symbols are importable and inspectable anywhere. OpenCV is demanded
-only at the moment a frame is actually read from a camera; when the extra is absent that
-demand surfaces as an actionable `WebcamCaptureError` carrying the install commands,
-rather than an opaque import crash.
-
-This is what makes the optional extra *functionally* optional rather than merely
-*declared* optional: a top-level import would silently turn a declared-optional
-dependency into a hard runtime requirement through the import graph.
 
 ## Rationale
 

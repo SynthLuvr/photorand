@@ -1,21 +1,17 @@
 """Webcam entropy capture — harvest temporal sensor noise via frame differencing.
 
-Optional entropy source depending on ``opencv-python-headless`` (the ``capture``
-extra).  ``cv2`` is imported lazily (at call time, not module load) so that
-``import src`` never requires the extra — see the ADR
-(``docs/webcam-capture-library.md``) for the full rationale.
-
+Entropy source backed by ``opencv-python-headless``, a required dependency.
 Consecutive-frame differencing cancels the static scene and fixed-pattern noise,
 leaving the stochastic read/shot-noise floor that constitutes genuine entropy.
 """
 
 from __future__ import annotations
 
-import importlib
 import time
 from functools import partial
 from typing import TYPE_CHECKING
 
+import cv2
 import numpy as np
 
 from src.logger import logger
@@ -38,28 +34,20 @@ _WARMUP_FRAMES = 5
 _PREFERRED_FOURCCS: tuple[str, ...] = ("MJPG", "YUYV")
 
 
+def _fourcc(label: str) -> int:
+    """Pack a 4-char FOURCC label into the little-endian int OpenCV expects.
+
+    Equivalent to ``cv2.VideoWriter_fourcc(*label)``, reproduced in pure
+    Python because the symbol is generated dynamically and lacks a type stub.
+    """
+    return sum(ord(c) << (8 * i) for i, c in enumerate(label))
+
+
 class WebcamCaptureError(RuntimeError):
     """Raised when webcam entropy capture cannot proceed."""
 
 
-def _import_cv2() -> Any:
-    """Import cv2 lazily, or raise a helpful error if the extra is missing.
-
-    Using ``importlib`` instead of a top-level ``import cv2`` keeps the module
-    importable on systems without the ``capture`` extra.
-    """
-    try:
-        return importlib.import_module("cv2")
-    except ModuleNotFoundError as exc:
-        raise WebcamCaptureError(
-            "Webcam capture requires the optional 'opencv-python-headless' package.\n"
-            "Install it with one of:\n"
-            "    uv sync --extra capture\n"
-            "    pip install 'photorand[capture]'"
-        ) from exc
-
-
-def _negotiate_pixel_format(cap: Any, cv2: Any, camera_index: int) -> str | None:
+def _negotiate_pixel_format(cap: Any, camera_index: int) -> str | None:
     """Select a pixel format the camera decodes into valid frames.
 
     MJPG is preferred: it is supported by virtually every webcam and OpenCV
@@ -71,7 +59,6 @@ def _negotiate_pixel_format(cap: Any, cv2: Any, camera_index: int) -> str | None
 
     Args:
         cap: An open ``cv2.VideoCapture``.
-        cv2: The ``cv2`` module.
         camera_index: Camera index, used only for log messages.
 
     Returns:
@@ -80,7 +67,7 @@ def _negotiate_pixel_format(cap: Any, cv2: Any, camera_index: int) -> str | None
     """
     chosen: str | None = None
     for label in _PREFERRED_FOURCCS:
-        fourcc = cv2.VideoWriter_fourcc(*label)
+        fourcc = _fourcc(label)
         if cap.set(cv2.CAP_PROP_FOURCC, fourcc):
             chosen = label
             break
@@ -109,11 +96,9 @@ def capture_webcam_noise(
     Returns a 2-D ``float64`` array ready for :func:`sample_entropy_grid`.
 
     Raises:
-        WebcamCaptureError: If the optional dependency is missing, the camera
-            cannot be opened, or fewer than two frame differences were captured.
+        WebcamCaptureError: If the camera cannot be opened or fewer than two
+            frame differences were captured.
     """
-    cv2 = _import_cv2()
-
     cap: Any = cv2.VideoCapture(camera_index)
     if not cap.isOpened():
         cap.release()
@@ -122,7 +107,7 @@ def capture_webcam_noise(
             "Check that the device is connected and not in use."
         )
 
-    _negotiate_pixel_format(cap, cv2, camera_index)
+    _negotiate_pixel_format(cap, camera_index)
 
     try:
         for _ in range(_WARMUP_FRAMES):
