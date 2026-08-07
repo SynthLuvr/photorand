@@ -1,8 +1,8 @@
 """Tests for the 'capture' CLI subcommand.
 
 Strategy mirrors test_main.py: ``PhotoRandSeed`` is patched so no real camera
-or RAW file is touched.  The assessment is injected to exercise the
-warn-vs-refuse policy.
+or RAW file is touched, and the assessment is injected to control the
+quality summary printed to stderr.
 """
 
 from __future__ import annotations
@@ -205,7 +205,7 @@ class TestCaptureFileOutput:
 
 
 # ===========================================================================
-# Weak-source policy (warn vs refuse)
+# Weak-source refusal
 # ===========================================================================
 
 
