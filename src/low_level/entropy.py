@@ -15,6 +15,26 @@ from dataclasses import dataclass
 
 from src.logger import logger
 
+
+class InsufficientEntropyError(RuntimeError):
+    """Raised when measured entropy is below the required floor.
+
+    The conditioning pipeline refuses to emit more bits than the source
+    contains (NIST SP 800-90B).  Raised when measured min-entropy is below the
+    floor and ``allow_weak`` is not set, or when a weak seed would be too short
+    (< 48 bytes) to seed the ChaCha20 expander.
+    """
+
+
+class EntropyHealthError(RuntimeError):
+    """Raised when an entropy-source startup health check fails.
+
+    Indicates a stuck-at fault or a wildly biased source (failed Repetition
+    Count or Adaptive Proportion test).  This is never overridable: a faulty
+    source must never produce output.
+    """
+
+
 # One-sided z-score for a 2^-20 false-positive rate (NIST SP 800-90B).
 _Z_99_9999 = 4.753
 

@@ -4,7 +4,12 @@ from __future__ import annotations
 
 from src.low_level.capture import WebcamCaptureError, capture_webcam_noise, generate_from_webcam
 from src.low_level.csprng import expand_entropy_chacha20
-from src.low_level.entropy import EntropyAssessment, estimate_entropy
+from src.low_level.entropy import (
+    EntropyAssessment,
+    EntropyHealthError,
+    InsufficientEntropyError,
+    estimate_entropy,
+)
 from src.low_level.generate import (
     condition_entropy_pool,
     generate_true_random_number,
@@ -16,6 +21,8 @@ from src.low_level.sample import reduce_fixed_pattern_noise, sample_entropy_grid
 
 __all__ = [
     "EntropyAssessment",
+    "EntropyHealthError",
+    "InsufficientEntropyError",
     "WebcamCaptureError",
     "capture_webcam_noise",
     "condition_entropy_pool",

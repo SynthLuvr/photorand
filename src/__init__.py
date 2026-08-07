@@ -6,7 +6,12 @@ from src.high_level.engine import PhotoRandEngine
 from src.high_level.seed import PhotoRandSeed
 from src.low_level.capture import WebcamCaptureError, capture_webcam_noise, generate_from_webcam
 from src.low_level.csprng import expand_entropy_chacha20
-from src.low_level.entropy import EntropyAssessment, estimate_entropy
+from src.low_level.entropy import (
+    EntropyAssessment,
+    EntropyHealthError,
+    InsufficientEntropyError,
+    estimate_entropy,
+)
 from src.low_level.generate import (
     condition_entropy_pool,
     generate_true_random_number,
@@ -20,6 +25,8 @@ __version__ = "1.3.0"
 
 __all__ = [
     "EntropyAssessment",
+    "EntropyHealthError",
+    "InsufficientEntropyError",
     "PhotoRandEngine",
     "PhotoRandSeed",
     "WebcamCaptureError",

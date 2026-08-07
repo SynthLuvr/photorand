@@ -9,6 +9,7 @@ from src.cli.seed_output import emit_seed_output, format_seed_value
 from src.high_level.seed import PhotoRandSeed
 from src.logger import logger
 from src.low_level.capture import WebcamCaptureError
+from src.low_level.entropy import EntropyHealthError, InsufficientEntropyError
 
 if TYPE_CHECKING:
     import argparse
@@ -28,13 +29,20 @@ def _print_capture_summary(
 
 
 def handle_capture(args: argparse.Namespace) -> None:
-    """Extract entropy from a webcam and emit the seed in the chosen format."""
+    """Extract entropy from a webcam and emit the seed in the chosen format.
+
+    The entropy floor is enforced inside :meth:`PhotoRandSeed.from_webcam`;
+    ``--allow-weak`` overrides it to emit a truncated seed.
+    """
     duration: float = args.duration
     camera_index: int = args.camera
+    allow_weak: bool = getattr(args, "allow_weak", False)
 
     try:
-        seed = PhotoRandSeed.from_webcam(duration=duration, camera_index=camera_index)
-    except WebcamCaptureError as e:
+        seed = PhotoRandSeed.from_webcam(
+            duration=duration, camera_index=camera_index, allow_weak=allow_weak
+        )
+    except (WebcamCaptureError, EntropyHealthError, InsufficientEntropyError) as e:
         logger.error(str(e))
         sys.exit(1)
     except Exception as e:
@@ -43,20 +51,6 @@ def handle_capture(args: argparse.Namespace) -> None:
 
     assessment = seed.assessment
     _print_capture_summary(assessment, duration, camera_index)
-
-    if not assessment.passed_health_checks:
-        logger.error(
-            "Entropy health checks FAILED (status: FAIL). Refusing to emit a seed "
-            "from a faulty source."
-        )
-        sys.exit(1)
-
-    if not assessment.sufficient_for_seed:
-        logger.warning(
-            "Captured entropy (%.1f bits) is below the 512-bit seed target; "
-            "the seed is still emitted but consider a longer --duration.",
-            assessment.total_entropy_bits,
-        )
 
     value = format_seed_value(seed, args.format, args)
     emit_seed_output(seed, value, getattr(args, "out", None), getattr(args, "binary", False))

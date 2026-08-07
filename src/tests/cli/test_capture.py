@@ -14,7 +14,7 @@ from unittest.mock import patch
 
 from src.cli.main import main
 from src.low_level.capture import WebcamCaptureError
-from src.low_level.entropy import EntropyAssessment
+from src.low_level.entropy import EntropyAssessment, EntropyHealthError, InsufficientEntropyError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -62,11 +62,6 @@ def _assessment(
 
 def _good_assessment() -> EntropyAssessment:
     return _assessment()
-
-
-def _fail_assessment() -> EntropyAssessment:
-    # A failed health check => overall status FAIL.
-    return _assessment(repetition_count_passed=False)
 
 
 def _low_assessment() -> EntropyAssessment:
@@ -220,31 +215,54 @@ class TestCaptureFileOutput:
 
 
 class TestCaptureWeakSource:
-    def test_fail_refuses(
+    def test_health_failure_refuses(
         self,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
         result = _run_capture(
-            ["capture", "hex"], monkeypatch, capsys, assessment=_fail_assessment()
+            ["capture", "hex"],
+            monkeypatch,
+            capsys,
+            from_webcam_side_effect=EntropyHealthError("health checks FAILED"),
         )
 
         assert result.exit_code == 1
         assert result.out == ""  # no seed emitted
         assert "FAILED" in caplog.text
 
-    def test_low_emits_with_warning(
+    def test_low_entropy_refuses_without_allow_weak(
         self,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
         caplog: pytest.LogCaptureFixture,
     ) -> None:
-        result = _run_capture(["capture", "hex"], monkeypatch, capsys, assessment=_low_assessment())
+        result = _run_capture(
+            ["capture", "hex"],
+            monkeypatch,
+            capsys,
+            from_webcam_side_effect=InsufficientEntropyError("below the 512-bit floor"),
+        )
+
+        assert result.exit_code == 1
+        assert result.out == ""  # no seed emitted
+        assert "below the 512-bit" in caplog.text
+
+    def test_low_entropy_emits_with_allow_weak(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        result = _run_capture(
+            ["capture", "hex", "--allow-weak"],
+            monkeypatch,
+            capsys,
+            assessment=_low_assessment(),
+        )
 
         assert result.exit_code is None
         assert result.out.strip() == MOCK_SEED.hex()
-        assert "below the 512-bit" in caplog.text
 
 
 # ===========================================================================
@@ -310,7 +328,9 @@ class TestCaptureArgs:
 
             main()
 
-        mock_seed_cls.from_webcam.assert_called_once_with(duration=3.0, camera_index=1)
+        mock_seed_cls.from_webcam.assert_called_once_with(
+            duration=3.0, camera_index=1, allow_weak=False
+        )
         capsys.readouterr()  # drain
 
     def test_duration_defaults_to_five(
@@ -331,5 +351,30 @@ class TestCaptureArgs:
 
             main()
 
-        mock_seed_cls.from_webcam.assert_called_once_with(duration=5.0, camera_index=0)
+        mock_seed_cls.from_webcam.assert_called_once_with(
+            duration=5.0, camera_index=0, allow_weak=False
+        )
+        capsys.readouterr()
+
+    def test_allow_weak_passed_to_from_webcam(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str],
+    ) -> None:
+        monkeypatch.setattr(sys, "argv", ["photorand", "capture", "hex", "--allow-weak"])
+
+        with (
+            patch("src.cli.capture.PhotoRandSeed") as mock_seed_cls,
+            contextlib.suppress(SystemExit),
+        ):
+            mock_seed = mock_seed_cls.return_value
+            mock_seed_cls.from_webcam.return_value = mock_seed
+            mock_seed.to_hex_string.return_value = MOCK_SEED.hex()
+            mock_seed.assessment = _good_assessment()
+
+            main()
+
+        mock_seed_cls.from_webcam.assert_called_once_with(
+            duration=5.0, camera_index=0, allow_weak=True
+        )
         capsys.readouterr()

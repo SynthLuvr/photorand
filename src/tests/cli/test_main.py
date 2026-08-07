@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, NamedTuple
 from unittest.mock import patch
 
 from src.cli.main import main
+from src.low_level.entropy import InsufficientEntropyError
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -252,6 +253,43 @@ class TestExtractValidation:
     ) -> None:
         out = run_cli(["extract", "hex"], monkeypatch, capsys)
         assert "error" in out.err.lower()
+
+
+class TestExtractAllowWeak:
+    """extract honours the entropy floor and the --allow-weak override."""
+
+    def test_insufficient_entropy_exits(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        caplog: pytest.LogCaptureFixture,
+    ) -> None:
+        monkeypatch.setattr(sys, "argv", ["photorand", "extract", "hex", "--from", "fake.arw"])
+        exit_code: int | str | None = None
+        with patch(
+            "src.cli.extract.PhotoRandSeed",
+            side_effect=InsufficientEntropyError("below the 512-bit floor"),
+        ):
+            try:
+                main()
+            except SystemExit as exc:
+                exit_code = exc.code
+
+        assert exit_code == 1
+        assert "below the 512-bit" in caplog.text
+
+    def test_allow_weak_passed_to_seed(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        monkeypatch.setattr(
+            sys, "argv", ["photorand", "extract", "hex", "--from", "fake.arw", "--allow-weak"]
+        )
+        with patch("src.cli.extract.PhotoRandSeed") as MockSeed:
+            MockSeed.return_value.to_hex_string.return_value = MOCK_SEED.hex()
+            with contextlib.suppress(SystemExit):
+                main()
+
+        MockSeed.assert_called_once_with("fake.arw", allow_weak=True)
+        capsys.readouterr()
 
 
 # ===========================================================================

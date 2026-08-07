@@ -10,11 +10,51 @@ import numpy as np
 import pytest
 
 from src.low_level import capture as cap
+from src.low_level import generate
 from src.low_level.capture import WebcamCaptureError, capture_webcam_noise, generate_from_webcam
-from src.low_level.entropy import EntropyAssessment
+from src.low_level.entropy import EntropyAssessment, EntropyHealthError
 
 # This test file mocks package internals (capture.cv2 / _WARMUP_FRAMES).
 # pyright: reportPrivateUsage=false
+
+
+def _assessment(
+    *,
+    total_entropy_bits: float = 600.0,
+    max_seed_bytes: int = 64,
+    repetition_count_passed: bool = True,
+    adaptive_proportion_passed: bool = True,
+) -> EntropyAssessment:
+    """Build an EntropyAssessment with controlled gate-relevant fields."""
+    return EntropyAssessment(
+        sample_count=256,
+        bits_per_symbol=4,
+        symbol_alphabet_size=16,
+        most_common_value_estimate=2.4,
+        collision_estimate=2.6,
+        shannon_entropy=2.9,
+        min_entropy=2.4,
+        total_entropy_bits=total_entropy_bits,
+        max_seed_bytes=max_seed_bytes,
+        chi_square_statistic=12.0,
+        chi_square_p_value=0.6,
+        is_uniform=True,
+        repetition_count_passed=repetition_count_passed,
+        repetition_count_max_run=4,
+        repetition_count_cutoff=12,
+        adaptive_proportion_passed=adaptive_proportion_passed,
+        adaptive_proportion_max_count=40,
+        adaptive_proportion_cutoff=59,
+        adaptive_proportion_windows=1,
+    )
+
+
+def _est_sufficient(_data: bytes) -> EntropyAssessment:
+    return _assessment()
+
+
+def _est_weak(_data: bytes) -> EntropyAssessment:
+    return _assessment(total_entropy_bits=400.0, max_seed_bytes=50)
 
 
 # ---------------------------------------------------------------------------
@@ -252,12 +292,15 @@ class TestGenerateFromWebcam:
         identical = [np.zeros((64, 64, 3), dtype=np.uint8)] * 20
         _install_fake_cv2(monkeypatch, identical)
 
-        _seed, _pool, assessment = generate_from_webcam(duration=5.0)
-
-        assert not assessment.passed_health_checks
+        # A stuck-at source fails the health check and is refused outright.
+        with pytest.raises(EntropyHealthError, match="health checks FAILED"):
+            generate_from_webcam(duration=5.0)
 
     def test_custom_functions_injected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         _install_fake_cv2(monkeypatch, _noise_frames(20))
+        # A 4-byte pool is far below the floor; mock the assessment as
+        # sufficient so the plumbing (custom fns) is what is exercised.
+        monkeypatch.setattr(generate, "estimate_entropy", _est_sufficient)
 
         def sample_fn(data: np.ndarray, grid_spacing: int = 4, reduce_fpn: bool = True) -> bytes:
             assert isinstance(data, np.ndarray)
@@ -273,3 +316,12 @@ class TestGenerateFromWebcam:
 
         assert seed == b"x" * 64
         assert pool == b"\x01\x02\x03\x04"
+
+    def test_allow_weak_truncates_weak_source(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        _install_fake_cv2(monkeypatch, _noise_frames(20))
+        monkeypatch.setattr(generate, "estimate_entropy", _est_weak)
+
+        seed, _pool, assessment = generate_from_webcam(duration=5.0, allow_weak=True)
+        # Output is capped at the measured entropy bound, never more.
+        assert len(seed) == 50
+        assert assessment.max_seed_bytes == 50
