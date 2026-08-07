@@ -148,11 +148,6 @@ def create_parser() -> tuple[
         help="Write raw binary bytes when saving to a file (requires --out).",
     )
     capture_common.add_argument(
-        "--allow-weak",
-        action="store_true",
-        help="Emit the seed even when entropy health checks report FAIL.",
-    )
-    capture_common.add_argument(
         "-v",
         "--verbose",
         action="store_true",

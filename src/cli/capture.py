@@ -44,10 +44,10 @@ def handle_capture(args: argparse.Namespace) -> None:
     assessment = seed.assessment
     _print_capture_summary(assessment, duration, camera_index)
 
-    if not assessment.passed_health_checks and not getattr(args, "allow_weak", False):
+    if not assessment.passed_health_checks:
         logger.error(
             "Entropy health checks FAILED (status: FAIL). Refusing to emit a seed "
-            "from a faulty source. Re-run with --allow-weak to emit anyway."
+            "from a faulty source."
         )
         sys.exit(1)
 

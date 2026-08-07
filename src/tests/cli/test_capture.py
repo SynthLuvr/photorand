@@ -220,7 +220,7 @@ class TestCaptureFileOutput:
 
 
 class TestCaptureWeakSource:
-    def test_fail_refuses_without_allow_weak(
+    def test_fail_refuses(
         self,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
@@ -233,19 +233,6 @@ class TestCaptureWeakSource:
         assert result.exit_code == 1
         assert result.out == ""  # no seed emitted
         assert "FAILED" in caplog.text
-
-    def test_fail_emits_with_allow_weak(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        result = _run_capture(
-            ["capture", "hex", "--allow-weak"],
-            monkeypatch,
-            capsys,
-            assessment=_fail_assessment(),
-        )
-
-        assert result.exit_code is None
-        assert result.out.strip() == MOCK_SEED.hex()
 
     def test_low_emits_with_warning(
         self,
