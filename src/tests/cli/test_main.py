@@ -255,8 +255,8 @@ class TestExtractValidation:
         assert "error" in out.err.lower()
 
 
-class TestExtractAllowWeak:
-    """extract honours the entropy floor and the --allow-weak override."""
+class TestExtractEntropyFloor:
+    """extract honours the entropy floor and refuses weak sources."""
 
     def test_insufficient_entropy_exits(
         self,
@@ -276,20 +276,6 @@ class TestExtractAllowWeak:
 
         assert exit_code == 1
         assert "below the 512-bit" in caplog.text
-
-    def test_allow_weak_passed_to_seed(
-        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-    ) -> None:
-        monkeypatch.setattr(
-            sys, "argv", ["photorand", "extract", "hex", "--from", "fake.arw", "--allow-weak"]
-        )
-        with patch("src.cli.extract.PhotoRandSeed") as MockSeed:
-            MockSeed.return_value.to_hex_string.return_value = MOCK_SEED.hex()
-            with contextlib.suppress(SystemExit):
-                main()
-
-        MockSeed.assert_called_once_with("fake.arw", allow_weak=True)
-        capsys.readouterr()
 
 
 # ===========================================================================

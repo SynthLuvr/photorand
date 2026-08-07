@@ -21,8 +21,7 @@ class InsufficientEntropyError(RuntimeError):
 
     The conditioning pipeline refuses to emit more bits than the source
     contains (NIST SP 800-90B).  Raised when measured min-entropy is below the
-    floor and ``allow_weak`` is not set, or when a weak seed would be too short
-    (< 48 bytes) to seed the ChaCha20 expander.
+    required floor; a weak source is never conditioned.
     """
 
 

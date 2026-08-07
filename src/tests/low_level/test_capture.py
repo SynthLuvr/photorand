@@ -53,10 +53,6 @@ def _est_sufficient(_data: bytes) -> EntropyAssessment:
     return _assessment()
 
 
-def _est_weak(_data: bytes) -> EntropyAssessment:
-    return _assessment(total_entropy_bits=400.0, max_seed_bytes=50)
-
-
 # ---------------------------------------------------------------------------
 # Fake cv2 / VideoCapture
 # ---------------------------------------------------------------------------
@@ -316,12 +312,3 @@ class TestGenerateFromWebcam:
 
         assert seed == b"x" * 64
         assert pool == b"\x01\x02\x03\x04"
-
-    def test_allow_weak_truncates_weak_source(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        _install_fake_cv2(monkeypatch, _noise_frames(20))
-        monkeypatch.setattr(generate, "estimate_entropy", _est_weak)
-
-        seed, _pool, assessment = generate_from_webcam(duration=5.0, allow_weak=True)
-        # Output is capped at the measured entropy bound, never more.
-        assert len(seed) == 50
-        assert assessment.max_seed_bytes == 50

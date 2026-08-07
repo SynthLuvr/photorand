@@ -73,12 +73,6 @@ def create_parser() -> tuple[
         action="store_true",
         help="Enable verbose logging.",
     )
-    extract_common.add_argument(
-        "--allow-weak",
-        action="store_true",
-        help="Emit a seed even when measured entropy is below the floor, "
-        "truncated to the measured entropy bound.",
-    )
 
     generate_common = argparse.ArgumentParser(add_help=False)
     generate_common.add_argument(
@@ -158,12 +152,6 @@ def create_parser() -> tuple[
         "--verbose",
         action="store_true",
         help="Enable verbose logging.",
-    )
-    capture_common.add_argument(
-        "--allow-weak",
-        action="store_true",
-        help="Emit a seed even when measured entropy is below the floor, "
-        "truncated to the measured entropy bound.",
     )
 
     capture_parser = subparsers.add_parser(

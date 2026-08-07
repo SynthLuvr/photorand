@@ -17,16 +17,13 @@ if TYPE_CHECKING:
 def handle_extract(args: argparse.Namespace) -> None:
     """Handle the 'extract' subcommand: extract true physical entropy from a RAW image.
 
-    The entropy floor is enforced inside :class:`PhotoRandSeed`; ``--allow-weak``
-    overrides it to emit a truncated seed.
+    The entropy floor is enforced inside :class:`PhotoRandSeed`.
 
     Args:
         args: Parsed CLI arguments.
     """
-    allow_weak: bool = getattr(args, "allow_weak", False)
-
     try:
-        seed = PhotoRandSeed(args.image_path, allow_weak=allow_weak)
+        seed = PhotoRandSeed(args.image_path)
     except (
         FileNotFoundError,
         IsADirectoryError,
