@@ -15,11 +15,10 @@ if TYPE_CHECKING:
 
 
 def handle_extract(args: argparse.Namespace) -> None:
-    """Handle the 'extract' subcommand: extract 64 bytes of true physical entropy.
+    """Handle the 'extract' subcommand: extract true physical entropy from a RAW image.
 
-    The entropy floor is enforced inside :class:`PhotoRandSeed`; the library
-    refuses (by default) to emit more bits than were measured.  ``--allow-weak``
-    overrides that to emit a seed truncated to the measured entropy bound.
+    The entropy floor is enforced inside :class:`PhotoRandSeed`; ``--allow-weak``
+    overrides it to emit a truncated seed.
 
     Args:
         args: Parsed CLI arguments.
@@ -28,10 +27,12 @@ def handle_extract(args: argparse.Namespace) -> None:
 
     try:
         seed = PhotoRandSeed(args.image_path, allow_weak=allow_weak)
-    except (FileNotFoundError, IsADirectoryError) as e:
-        logger.error(str(e))
-        sys.exit(1)
-    except (EntropyHealthError, InsufficientEntropyError) as e:
+    except (
+        FileNotFoundError,
+        IsADirectoryError,
+        EntropyHealthError,
+        InsufficientEntropyError,
+    ) as e:
         logger.error(str(e))
         sys.exit(1)
     except Exception as e:

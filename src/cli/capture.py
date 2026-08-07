@@ -31,9 +31,8 @@ def _print_capture_summary(
 def handle_capture(args: argparse.Namespace) -> None:
     """Extract entropy from a webcam and emit the seed in the chosen format.
 
-    The entropy floor is enforced inside :meth:`PhotoRandSeed.from_webcam`; the
-    library refuses (by default) to emit more bits than were measured.  ``--allow-weak``
-    overrides that to emit a seed truncated to the measured entropy bound.
+    The entropy floor is enforced inside :meth:`PhotoRandSeed.from_webcam`;
+    ``--allow-weak`` overrides it to emit a truncated seed.
     """
     duration: float = args.duration
     camera_index: int = args.camera
