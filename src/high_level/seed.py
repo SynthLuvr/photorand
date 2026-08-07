@@ -23,15 +23,30 @@ class PhotoRandSeed:
     _raw_seed: bytes
     _assessment: EntropyAssessment
 
-    def __init__(self, image_path: str) -> None:
+    def __init__(
+        self,
+        image_path: str,
+        *,
+        min_entropy_bits: int = 512,
+        allow_weak: bool = False,
+    ) -> None:
         """Initialize the TRNG by ingesting a RAW image and extracting entropy.
 
         Args:
             image_path: Path to the RAW image file.
+            min_entropy_bits: Entropy floor in bits enforced by the conditioner.
+            allow_weak: When ``True``, emit a seed truncated to the measured
+                entropy bound instead of refusing a weak source.
+
+        Raises:
+            EntropyHealthError: If a startup health check fails.
+            InsufficientEntropyError: If measured entropy is below the floor.
         """
         logger.info("[PhotoRandSeed] Extracting TRNG entropy from: %s", image_path)
 
-        self._raw_seed, _, self._assessment = generate_with_assessment(image_path)
+        self._raw_seed, _, self._assessment = generate_with_assessment(
+            image_path, min_entropy_bits=min_entropy_bits, allow_weak=allow_weak
+        )
 
         logger.info(
             "[PhotoRandSeed] Seed generated. Measured min-entropy: %.3f bits/symbol "
@@ -46,12 +61,24 @@ class PhotoRandSeed:
         cls,
         duration: float = 5.0,
         camera_index: int = 0,
+        *,
+        min_entropy_bits: int = 512,
+        allow_weak: bool = False,
     ) -> PhotoRandSeed:
         """Build a seed from a live webcam capture instead of a RAW file.
+
+        Args:
+            duration: Capture duration in seconds.
+            camera_index: Camera device index.
+            min_entropy_bits: Entropy floor in bits enforced by the conditioner.
+            allow_weak: When ``True``, emit a seed truncated to the measured
+                entropy bound instead of refusing a weak source.
 
         Raises:
             WebcamCaptureError: If the camera cannot be opened or yields too few
                 usable frames.
+            EntropyHealthError: If a startup health check fails.
+            InsufficientEntropyError: If measured entropy is below the floor.
         """
         logger.info(
             "[PhotoRandSeed] Extracting TRNG entropy from webcam %d (%.1fs)",
@@ -59,7 +86,10 @@ class PhotoRandSeed:
             duration,
         )
         raw_seed, _pool, assessment = generate_from_webcam(
-            duration=duration, camera_index=camera_index
+            duration=duration,
+            camera_index=camera_index,
+            min_entropy_bits=min_entropy_bits,
+            allow_weak=allow_weak,
         )
 
         obj = cls.__new__(cls)
