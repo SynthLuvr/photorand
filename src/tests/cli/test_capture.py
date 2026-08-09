@@ -1,8 +1,8 @@
 """Tests for the 'capture' CLI subcommand.
 
 Strategy mirrors test_main.py: ``PhotoRandSeed`` is patched so no real camera
-or RAW file is touched.  The assessment is injected to exercise the
-warn-vs-refuse policy.
+or RAW file is touched, and the assessment is injected to control the
+quality summary printed to stderr.
 """
 
 from __future__ import annotations
@@ -62,11 +62,6 @@ def _assessment(
 
 def _good_assessment() -> EntropyAssessment:
     return _assessment()
-
-
-def _low_assessment() -> EntropyAssessment:
-    # Health checks pass but total entropy < 512 bits => status LOW.
-    return _assessment(total_entropy_bits=100.0)
 
 
 class CaptureResult(NamedTuple):
@@ -210,7 +205,7 @@ class TestCaptureFileOutput:
 
 
 # ===========================================================================
-# Weak-source policy (warn vs refuse)
+# Weak-source refusal
 # ===========================================================================
 
 
@@ -232,7 +227,7 @@ class TestCaptureWeakSource:
         assert result.out == ""  # no seed emitted
         assert "FAILED" in caplog.text
 
-    def test_low_entropy_refuses_without_allow_weak(
+    def test_low_entropy_refuses(
         self,
         monkeypatch: pytest.MonkeyPatch,
         capsys: pytest.CaptureFixture[str],
@@ -248,21 +243,6 @@ class TestCaptureWeakSource:
         assert result.exit_code == 1
         assert result.out == ""  # no seed emitted
         assert "below the 512-bit" in caplog.text
-
-    def test_low_entropy_emits_with_allow_weak(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        result = _run_capture(
-            ["capture", "hex", "--allow-weak"],
-            monkeypatch,
-            capsys,
-            assessment=_low_assessment(),
-        )
-
-        assert result.exit_code is None
-        assert result.out.strip() == MOCK_SEED.hex()
 
 
 # ===========================================================================
@@ -328,9 +308,7 @@ class TestCaptureArgs:
 
             main()
 
-        mock_seed_cls.from_webcam.assert_called_once_with(
-            duration=3.0, camera_index=1, allow_weak=False
-        )
+        mock_seed_cls.from_webcam.assert_called_once_with(duration=3.0, camera_index=1)
         capsys.readouterr()  # drain
 
     def test_duration_defaults_to_five(
@@ -351,30 +329,5 @@ class TestCaptureArgs:
 
             main()
 
-        mock_seed_cls.from_webcam.assert_called_once_with(
-            duration=5.0, camera_index=0, allow_weak=False
-        )
-        capsys.readouterr()
-
-    def test_allow_weak_passed_to_from_webcam(
-        self,
-        monkeypatch: pytest.MonkeyPatch,
-        capsys: pytest.CaptureFixture[str],
-    ) -> None:
-        monkeypatch.setattr(sys, "argv", ["photorand", "capture", "hex", "--allow-weak"])
-
-        with (
-            patch("src.cli.capture.PhotoRandSeed") as mock_seed_cls,
-            contextlib.suppress(SystemExit),
-        ):
-            mock_seed = mock_seed_cls.return_value
-            mock_seed_cls.from_webcam.return_value = mock_seed
-            mock_seed.to_hex_string.return_value = MOCK_SEED.hex()
-            mock_seed.assessment = _good_assessment()
-
-            main()
-
-        mock_seed_cls.from_webcam.assert_called_once_with(
-            duration=5.0, camera_index=0, allow_weak=True
-        )
+        mock_seed_cls.from_webcam.assert_called_once_with(duration=5.0, camera_index=0)
         capsys.readouterr()

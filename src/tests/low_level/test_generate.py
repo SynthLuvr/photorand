@@ -79,10 +79,6 @@ def _est_low_truncatable(_data: bytes) -> EntropyAssessment:
     return _assessment(total_entropy_bits=400.0, max_seed_bytes=50)
 
 
-def _est_too_short(_data: bytes) -> EntropyAssessment:
-    return _assessment(total_entropy_bits=200.0, max_seed_bytes=25)
-
-
 def _est_health_fail(_data: bytes) -> EntropyAssessment:
     return _assessment(repetition_count_passed=False)
 
@@ -139,31 +135,15 @@ class TestConditionEntropyPool:
         seed, _pool, _assessment_out = condition_entropy_pool(_DATA, sample_fn=_sample)
         assert len(seed) == 64
 
-    def test_refuses_low_entropy_by_default(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_refuses_low_entropy(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(generate, "estimate_entropy", _est_low_truncatable)
         with pytest.raises(InsufficientEntropyError, match="below the 512-bit floor"):
             condition_entropy_pool(_DATA, sample_fn=_sample)
 
-    def test_allow_weak_truncates_to_max_seed_bytes(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(generate, "estimate_entropy", _est_low_truncatable)
-        seed, _pool, assessment = condition_entropy_pool(_DATA, sample_fn=_sample, allow_weak=True)
-        # Output never carries more bits than the source contains.
-        assert len(seed) == 50
-        assert assessment.max_seed_bytes == 50
-
-    def test_allow_weak_rejects_seed_too_short_for_chacha20(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
-        monkeypatch.setattr(generate, "estimate_entropy", _est_too_short)
-        with pytest.raises(InsufficientEntropyError, match="too short to seed"):
-            condition_entropy_pool(_DATA, sample_fn=_sample, allow_weak=True)
-
-    def test_failed_health_refuses_even_with_allow_weak(
-        self, monkeypatch: pytest.MonkeyPatch
-    ) -> None:
+    def test_failed_health_refuses(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(generate, "estimate_entropy", _est_health_fail)
         with pytest.raises(EntropyHealthError, match="health checks FAILED"):
-            condition_entropy_pool(_DATA, sample_fn=_sample, allow_weak=True)
+            condition_entropy_pool(_DATA, sample_fn=_sample)
 
     def test_min_entropy_bits_is_configurable(self, monkeypatch: pytest.MonkeyPatch) -> None:
         # 400 measured bits is insufficient at the default floor but sufficient
@@ -182,10 +162,3 @@ class TestGenerateWithAssessment:
         monkeypatch.setattr(generate, "estimate_entropy", _est_very_low)
         with pytest.raises(InsufficientEntropyError, match="below the 512-bit floor"):
             generate_with_assessment("fake.arw", ingest_fn=_ingest)
-
-    def test_allow_weak_threads_through(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        monkeypatch.setattr(generate, "estimate_entropy", _est_low_truncatable)
-        seed, _pool, _assessment_out = generate_with_assessment(
-            "fake.arw", ingest_fn=_ingest, allow_weak=True
-        )
-        assert len(seed) == 50

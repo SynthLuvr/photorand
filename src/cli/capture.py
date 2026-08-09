@@ -31,17 +31,13 @@ def _print_capture_summary(
 def handle_capture(args: argparse.Namespace) -> None:
     """Extract entropy from a webcam and emit the seed in the chosen format.
 
-    The entropy floor is enforced inside :meth:`PhotoRandSeed.from_webcam`;
-    ``--allow-weak`` overrides it to emit a truncated seed.
+    The entropy floor is enforced inside :meth:`PhotoRandSeed.from_webcam`.
     """
     duration: float = args.duration
     camera_index: int = args.camera
-    allow_weak: bool = getattr(args, "allow_weak", False)
 
     try:
-        seed = PhotoRandSeed.from_webcam(
-            duration=duration, camera_index=camera_index, allow_weak=allow_weak
-        )
+        seed = PhotoRandSeed.from_webcam(duration=duration, camera_index=camera_index)
     except (WebcamCaptureError, EntropyHealthError, InsufficientEntropyError) as e:
         logger.error(str(e))
         sys.exit(1)

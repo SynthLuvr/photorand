@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from src.logger import logger
 from src.low_level.entropy import (
     EntropyAssessment,
     EntropyHealthError,
@@ -20,21 +19,15 @@ if TYPE_CHECKING:
 
     import numpy as np
 
-# ChaCha20 needs a 32-byte key + 16-byte nonce; a seed shorter than 48 bytes
-# can't drive the expander, so a weak seed below this is refused (not padded).
-_MIN_EXPANDABLE_SEED_BYTES = 48
-
 
 def _enforce_floor(
     assessment: EntropyAssessment,
     min_entropy_bits: int,
-    allow_weak: bool,
 ) -> None:
     """Raise if the source is too faulty or too weak to emit a seed.
 
-    Health-check failures are never overridable.  Below the floor the source is
-    refused unless *allow_weak* is set, in which case the output is truncated to
-    the measured entropy bound (but still refused if too short for ChaCha20).
+    Health-check failures are never conditioned, and a source below the entropy
+    floor is always refused — there is no override.
     """
     if not assessment.passed_health_checks:
         raise EntropyHealthError(
@@ -42,30 +35,11 @@ def _enforce_floor(
             "proportion). A faulty source is never conditioned."
         )
 
-    if assessment.total_entropy_bits >= min_entropy_bits:
-        return
-
-    if not allow_weak:
+    if assessment.total_entropy_bits < min_entropy_bits:
         raise InsufficientEntropyError(
             f"Measured entropy ({assessment.total_entropy_bits:.1f} bits) is below "
-            f"the {min_entropy_bits}-bit floor. Re-capture with more data, or use "
-            "allow_weak=True to emit a truncated seed."
+            f"the {min_entropy_bits}-bit floor. Re-capture with more data."
         )
-
-    if assessment.max_seed_bytes < _MIN_EXPANDABLE_SEED_BYTES:
-        raise InsufficientEntropyError(
-            f"Measured entropy ({assessment.total_entropy_bits:.1f} bits => "
-            f"{assessment.max_seed_bytes} bytes) is too short to seed the ChaCha20 "
-            f"expander (needs >= {_MIN_EXPANDABLE_SEED_BYTES} bytes). Capture more entropy."
-        )
-
-    logger.warning(
-        "[generate] Emitting a weak seed: %.1f bits is below the %d-bit floor; "
-        "output truncated to %d measured bytes.",
-        assessment.total_entropy_bits,
-        min_entropy_bits,
-        assessment.max_seed_bytes,
-    )
 
 
 def condition_entropy_pool(
@@ -74,7 +48,6 @@ def condition_entropy_pool(
     hash_fn: Callable[[bytes], bytes] = hash_entropy_pool,
     *,
     min_entropy_bits: int = 512,
-    allow_weak: bool = False,
 ) -> tuple[bytes, bytes, EntropyAssessment]:
     """Sample, assess, and condition a raw sensor array into a TRNG seed.
 
@@ -87,20 +60,18 @@ def condition_entropy_pool(
         sample_fn: Samples the array into a raw entropy byte stream.
         hash_fn: Compresses the pool into a uniformly distributed digest.
         min_entropy_bits: Entropy floor in bits.
-        allow_weak: Emit a truncated seed below the floor instead of refusing.
 
     Returns:
         ``(seed, entropy_pool, assessment)``.  *seed* is the conditioned digest,
         truncated to ``max_seed_bytes`` (64 when sufficient).
 
     Raises:
-        EntropyHealthError: If a startup health check fails (never overridable).
-        InsufficientEntropyError: If below the floor and ``allow_weak`` is off,
-            or a weak seed would be too short for ChaCha20.
+        EntropyHealthError: If a startup health check fails.
+        InsufficientEntropyError: If measured entropy is below the floor.
     """
     entropy_pool = sample_fn(raw_image_data)
     assessment = estimate_entropy(entropy_pool)
-    _enforce_floor(assessment, min_entropy_bits, allow_weak)
+    _enforce_floor(assessment, min_entropy_bits)
     seed = hash_fn(entropy_pool)[: assessment.max_seed_bytes]
     return seed, entropy_pool, assessment
 
@@ -112,7 +83,6 @@ def generate_with_assessment(
     hash_fn: Callable[[bytes], bytes] = hash_entropy_pool,
     *,
     min_entropy_bits: int = 512,
-    allow_weak: bool = False,
 ) -> tuple[bytes, bytes, EntropyAssessment]:
     """Extract entropy from a RAW image and measure its quality.
 
@@ -129,15 +99,13 @@ def generate_with_assessment(
         hash_fn: Hashes the entropy pool into a fixed-length, uniformly
             distributed byte string. Defaults to :func:`hash_entropy_pool`.
         min_entropy_bits: Entropy floor in bits.
-        allow_weak: Emit a truncated seed below the floor instead of refusing.
 
     Returns:
         ``(seed, entropy_pool, assessment)``.
 
     Raises:
         EntropyHealthError: If a startup health check fails.
-        InsufficientEntropyError: If measured entropy is below the floor (and
-            ``allow_weak`` is off or the seed would be too short).
+        InsufficientEntropyError: If measured entropy is below the floor.
     """
     raw_image_data = ingest_fn(image_path)
     return condition_entropy_pool(
@@ -145,7 +113,6 @@ def generate_with_assessment(
         sample_fn=sample_fn,
         hash_fn=hash_fn,
         min_entropy_bits=min_entropy_bits,
-        allow_weak=allow_weak,
     )
 
 
@@ -156,7 +123,6 @@ def generate_true_random_number(
     hash_fn: Callable[[bytes], bytes] = hash_entropy_pool,
     *,
     min_entropy_bits: int = 512,
-    allow_weak: bool = False,
 ) -> bytes:
     """Extract physical entropy from a RAW image and return the conditioned seed.
 
@@ -169,6 +135,5 @@ def generate_true_random_number(
         sample_fn,
         hash_fn,
         min_entropy_bits=min_entropy_bits,
-        allow_weak=allow_weak,
     )
     return seed

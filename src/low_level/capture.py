@@ -157,7 +157,6 @@ def generate_from_webcam(
     reduce_fpn: bool = False,
     hash_fn: Callable[[bytes], bytes] = hash_entropy_pool,
     min_entropy_bits: int = 512,
-    allow_weak: bool = False,
 ) -> tuple[bytes, bytes, EntropyAssessment]:
     """Capture webcam noise and run it through the standard entropy pipeline.
 
@@ -172,5 +171,4 @@ def generate_from_webcam(
         sample_fn=sampler,
         hash_fn=hash_fn,
         min_entropy_bits=min_entropy_bits,
-        allow_weak=allow_weak,
     )

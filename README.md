@@ -195,9 +195,9 @@ uv run photorand capture hex -o seed.bin --binary
 
 The captured data flows through the same NIST SP 800-90B assessment + SHA3-512
 conditioning as RAW files, and a one-line quality summary is printed to stderr.
-By default the command refuses to emit a seed when the entropy health checks
-report `FAIL` (a faulty or silently-compressed source); pass `--allow-weak` to
-override.
+The command refuses to emit a seed when the entropy health checks
+report `FAIL` (a faulty or silently-compressed source) or when measured
+entropy falls below the required floor.
 
 *For the full list of commands and options, run:* `uv run photorand --help`
 
