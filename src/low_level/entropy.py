@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass
+from itertools import pairwise
 
 from src.logger import logger
 
@@ -226,61 +227,31 @@ def _collision_estimate(symbols: list[int], bits_per_symbol: int) -> float:
 
 
 def _markov_estimate(symbols: list[int], bits_per_symbol: int) -> float:
-    """NIST SP 800-90B §6.2.3 Markov estimator (non-IID), generalized to
-    multi-bit alphabets via a full *k*×*k* first-order transition matrix.
+    """NIST SP 800-90B Markov estimator (§6.2.3, non-IID track).
 
-    Unlike the MCV and Collision estimators (IID track), the Markov estimator
-    captures temporal correlation: it measures how predictable each symbol is
-    given the preceding symbol.  Sensor samples can be spatially/temporally
-    correlated even after frame differencing and grid subsampling, which
-    inflates IID-track estimates.  The Markov estimator is always more
-    conservative on such data.
-
-    Min-entropy is bounded by the most probable single-step transition:
-
-        H∞ = −log₂ max_{i,j} P(j | i)
-
-    For a perfectly correlated (or perfectly cyclic) source the most probable
-    transition is 1.0 and the estimate collapses to zero, regardless of the
-    marginal distribution.
+    Captures temporal correlation via a first-order transition matrix.
+    Min-entropy is bounded by the most probable single-step transition,
+    ``H∞ = −log₂ max P(j|i)``.  Unlike the IID-track estimators this catches
+    correlated sensor samples whose marginals look uniform.
     """
     n = len(symbols)
     if n < 2:
-        # No transition pairs to analyse.
         return float(bits_per_symbol) if n == 1 else 0.0
 
     alphabet_size = 1 << bits_per_symbol
-
-    # The k×k transition matrix needs roughly k² observations (≈1 per cell)
-    # for a reliable maximum-probability estimate.  Below k²/2 the matrix is
-    # too sparse: a source symbol seen once trivially yields p = 1.0,
-    # producing a noise-dominated estimate.  In that regime the estimator
-    # abstains (returns the maximum) rather than reporting a misleading value.
+    # Below half a full k×k matrix the estimate is noise-dominated: a symbol
+    # seen once trivially yields p = 1.0.  Abstain in that regime.
     if n - 1 < alphabet_size * alphabet_size // 2:
         return float(bits_per_symbol)
 
-    # Build first-order transition counts: C[(i, j)] = # times j follows i.
     pair_counts: Counter[tuple[int, int]] = Counter()
-    for i in range(n - 1):
-        pair_counts[(symbols[i], symbols[i + 1])] += 1
-
-    # Row totals — number of transitions originating from each symbol.
     row_totals: Counter[int] = Counter()
-    for (src, _dst), count in pair_counts.items():
-        row_totals[src] += count
+    for prev, cur in pairwise(symbols):
+        pair_counts[(prev, cur)] += 1
+        row_totals[prev] += 1
 
-    # Most probable single-step transition probability.
-    p_max = 0.0
-    for (src, _dst), count in pair_counts.items():
-        p = count / row_totals[src]
-        if p > p_max:
-            p_max = p
-
-    if p_max <= 0.0:
-        return float(bits_per_symbol)
-
-    estimate = -math.log2(p_max) if p_max < 1.0 else 0.0
-    return max(0.0, min(estimate, float(bits_per_symbol)))
+    p_max = max(count / row_totals[src] for (src, _), count in pair_counts.items())
+    return min(-math.log2(p_max), float(bits_per_symbol))
 
 
 def _shannon_entropy(symbols: list[int], bits_per_symbol: int) -> float:
@@ -407,8 +378,7 @@ def estimate_entropy(data: bytes, bits_per_symbol: int = 4) -> EntropyAssessment
     markov_est = _markov_estimate(symbols, bits_per_symbol)
     shannon = _shannon_entropy(symbols, bits_per_symbol)
 
-    # Conservative min-entropy = minimum of the min-entropy estimators
-    # (IID and non-IID tracks combined for maximum conservatism).
+    # Conservative min-entropy = minimum of all estimators.
     min_entropy = min(mcv_est, coll_est, markov_est)
     total_bits = min_entropy * n
     max_bytes = min(int(total_bits // 8), 64)

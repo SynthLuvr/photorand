@@ -273,10 +273,8 @@ class TestCaptureWebcamNoise:
 
 class TestGenerateFromWebcam:
     def test_returns_seed_pool_assessment(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        # 128×128 frames → 1024 grid samples (grid_spacing=4); the Markov
-        # (non-IID) estimator correctly detects residual spatial correlation
-        # in frame-differenced noise, so a realistic sample count is needed
-        # to exceed the 512-bit floor.
+        # 128×128 frames give enough samples to exceed the 512-bit floor
+        # despite the conservative Markov estimator.
         _install_fake_cv2(monkeypatch, _noise_frames(40, shape=(128, 128, 3)))
 
         seed, pool, assessment = generate_from_webcam(duration=5.0)

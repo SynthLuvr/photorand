@@ -107,12 +107,8 @@ class TestCollisionEstimator:
 
 
 def _make_cyclic_bytes(period: int, n: int, bits: int = 4) -> bytes:
-    """Generate *n* symbols cycling deterministically through ``[0, period)``.
-
-    The marginal distribution is uniform over ``period`` symbols, but each
-    symbol is fully predictable from its predecessor — exactly the kind of
-    temporal correlation the Markov estimator must catch.
-    """
+    """Generate *n* symbols cycling through ``[0, period)`` — uniform marginals,
+    but each symbol fully predictable from its predecessor."""
     mask = (1 << bits) - 1
     return bytes((i % period) & mask for i in range(n))
 
@@ -121,7 +117,6 @@ class TestMarkovEstimator:
     def test_uniform_gives_reasonable_entropy(self) -> None:
         data = _make_uniform_bytes(10000)
         result = estimate_entropy(data)
-        # For 4-bit uniform data, Markov should be close to (but below) 4.0.
         assert result.markov_estimate > 3.0
         assert result.markov_estimate <= 4.0
 
@@ -131,21 +126,14 @@ class TestMarkovEstimator:
         assert result.markov_estimate < 0.01
 
     def test_cyclic_sequence_captures_correlation(self) -> None:
-        """A cyclic sequence has uniform marginals but zero Markov entropy.
-
-        ``0,1,…,15,0,1,…,15,…`` cycles through all 16 symbols so every symbol
-        appears with probability 1/16 (MCV ≈ 4.0), yet each transition is
-        deterministic and the Markov estimate collapses to ~0.
-        """
+        # Uniform marginals (MCV ≈ 4.0) but deterministic transitions → ~0.
         data = _make_cyclic_bytes(period=16, n=16000)
         result = estimate_entropy(data)
         assert result.markov_estimate < 0.1
         assert result.most_common_value_estimate > 3.0
 
     def test_correlated_runs_lower_than_mcv(self) -> None:
-        """Sticky transitions (runs) produce Markov < MCV."""
-        # Build a sequence with 80% self-transition probability across all 16
-        # symbols so marginal frequencies stay roughly uniform.
+        # 80% self-transition keeps marginals roughly uniform.
         rng = random.Random(2024)
         symbols: list[int] = [rng.randint(0, 15)]
         for _ in range(4999):
@@ -158,7 +146,6 @@ class TestMarkovEstimator:
         assert result.markov_estimate < result.most_common_value_estimate
 
     def test_markov_dominates_min_entropy_for_correlated(self) -> None:
-        """For a cyclic source, Markov is the most conservative estimator."""
         data = _make_cyclic_bytes(period=16, n=16000)
         result = estimate_entropy(data)
         assert result.min_entropy == pytest.approx(result.markov_estimate)
