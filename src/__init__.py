@@ -18,6 +18,7 @@ from src.low_level.generate import (
     generate_with_assessment,
 )
 from src.low_level.hash import hash_entropy_pool
+from src.low_level.health import HealthMonitor, HealthStatus, RuntimeHealthError
 from src.low_level.ingest import ingest_raw_image
 from src.low_level.sample import reduce_fixed_pattern_noise, sample_entropy_grid
 
@@ -26,9 +27,12 @@ __version__ = "1.3.0"
 __all__ = [
     "EntropyAssessment",
     "EntropyHealthError",
+    "HealthMonitor",
+    "HealthStatus",
     "InsufficientEntropyError",
     "PhotoRandEngine",
     "PhotoRandSeed",
+    "RuntimeHealthError",
     "WebcamCaptureError",
     "capture_webcam_noise",
     "condition_entropy_pool",
