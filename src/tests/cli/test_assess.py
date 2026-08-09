@@ -22,6 +22,7 @@ def _make_mock_assessment() -> EntropyAssessment:
         symbol_alphabet_size=16,
         most_common_value_estimate=3.8,
         collision_estimate=3.95,
+        markov_estimate=3.9,
         shannon_entropy=3.98,
         min_entropy=3.8,
         total_entropy_bits=19000.0,

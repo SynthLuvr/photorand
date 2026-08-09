@@ -35,6 +35,7 @@ def _print_report(assessment: EntropyAssessment, image_path: str) -> None:
     print("  Min-Entropy Estimates (bits per symbol)")
     print(f"    Most Common Value:  {assessment.most_common_value_estimate:.3f}")
     print(f"    Collision:          {assessment.collision_estimate:.3f}")
+    print(f"    Markov:             {assessment.markov_estimate:.3f}")
     print(f"    Shannon:            {assessment.shannon_entropy:.3f}")
     print(f"    {'─' * 36}")
     print(f"    Conservative min:   {assessment.min_entropy:.3f} bits/symbol")
@@ -110,6 +111,7 @@ def handle_assess(args: argparse.Namespace) -> None:
                     "bits_per_symbol": assessment.bits_per_symbol,
                     "most_common_value_estimate": round(assessment.most_common_value_estimate, 4),
                     "collision_estimate": round(assessment.collision_estimate, 4),
+                    "markov_estimate": round(assessment.markov_estimate, 4),
                     "shannon_entropy": round(assessment.shannon_entropy, 4),
                     "min_entropy": round(assessment.min_entropy, 4),
                     "total_entropy_bits": round(assessment.total_entropy_bits, 2),

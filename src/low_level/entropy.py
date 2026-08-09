@@ -12,6 +12,7 @@ from __future__ import annotations
 import math
 from collections import Counter
 from dataclasses import dataclass
+from itertools import pairwise
 
 from src.logger import logger
 
@@ -119,6 +120,7 @@ class EntropyAssessment:
     # --- Min-entropy estimators (NIST SP 800-90B) ---
     most_common_value_estimate: float
     collision_estimate: float
+    markov_estimate: float
     shannon_entropy: float
 
     # --- Conservative summary ---
@@ -222,6 +224,34 @@ def _collision_estimate(symbols: list[int], bits_per_symbol: int) -> float:
     if p <= 0.0:
         return 0.0
     return min(-math.log2(p), float(bits_per_symbol))
+
+
+def _markov_estimate(symbols: list[int], bits_per_symbol: int) -> float:
+    """NIST SP 800-90B Markov estimator (§6.2.3, non-IID track).
+
+    Captures temporal correlation via a first-order transition matrix.
+    Min-entropy is bounded by the most probable single-step transition,
+    ``H∞ = −log₂ max P(j|i)``.  Unlike the IID-track estimators this catches
+    correlated sensor samples whose marginals look uniform.
+    """
+    n = len(symbols)
+    if n < 2:
+        return float(bits_per_symbol) if n == 1 else 0.0
+
+    alphabet_size = 1 << bits_per_symbol
+    # Below half a full k×k matrix the estimate is noise-dominated: a symbol
+    # seen once trivially yields p = 1.0.  Abstain in that regime.
+    if n - 1 < alphabet_size * alphabet_size // 2:
+        return float(bits_per_symbol)
+
+    pair_counts: Counter[tuple[int, int]] = Counter()
+    row_totals: Counter[int] = Counter()
+    for prev, cur in pairwise(symbols):
+        pair_counts[(prev, cur)] += 1
+        row_totals[prev] += 1
+
+    p_max = max(count / row_totals[src] for (src, _), count in pair_counts.items())
+    return min(-math.log2(p_max), float(bits_per_symbol))
 
 
 def _shannon_entropy(symbols: list[int], bits_per_symbol: int) -> float:
@@ -345,10 +375,11 @@ def estimate_entropy(data: bytes, bits_per_symbol: int = 4) -> EntropyAssessment
 
     mcv_est = _mcv_estimate(symbols, bits_per_symbol)
     coll_est = _collision_estimate(symbols, bits_per_symbol)
+    markov_est = _markov_estimate(symbols, bits_per_symbol)
     shannon = _shannon_entropy(symbols, bits_per_symbol)
 
-    # Conservative min-entropy = minimum of the min-entropy estimators.
-    min_entropy = min(mcv_est, coll_est)
+    # Conservative min-entropy = minimum of all estimators.
+    min_entropy = min(mcv_est, coll_est, markov_est)
     total_bits = min_entropy * n
     max_bytes = min(int(total_bits // 8), 64)
 
@@ -362,6 +393,7 @@ def estimate_entropy(data: bytes, bits_per_symbol: int = 4) -> EntropyAssessment
         symbol_alphabet_size=alphabet_size,
         most_common_value_estimate=mcv_est,
         collision_estimate=coll_est,
+        markov_estimate=markov_est,
         shannon_entropy=shannon,
         min_entropy=min_entropy,
         total_entropy_bits=total_bits,

@@ -43,6 +43,7 @@ def _assessment(
         symbol_alphabet_size=16,
         most_common_value_estimate=2.4,
         collision_estimate=2.6,
+        markov_estimate=2.5,
         shannon_entropy=2.9,
         min_entropy=min_entropy,
         total_entropy_bits=total_entropy_bits,

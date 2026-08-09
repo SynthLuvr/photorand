@@ -32,6 +32,7 @@ def _assessment(
         symbol_alphabet_size=16,
         most_common_value_estimate=2.4,
         collision_estimate=2.6,
+        markov_estimate=2.5,
         shannon_entropy=2.9,
         min_entropy=2.4,
         total_entropy_bits=total_entropy_bits,
@@ -272,7 +273,9 @@ class TestCaptureWebcamNoise:
 
 class TestGenerateFromWebcam:
     def test_returns_seed_pool_assessment(self, monkeypatch: pytest.MonkeyPatch) -> None:
-        _install_fake_cv2(monkeypatch, _noise_frames(40))
+        # 128×128 frames give enough samples to exceed the 512-bit floor
+        # despite the conservative Markov estimator.
+        _install_fake_cv2(monkeypatch, _noise_frames(40, shape=(128, 128, 3)))
 
         seed, pool, assessment = generate_from_webcam(duration=5.0)
 
