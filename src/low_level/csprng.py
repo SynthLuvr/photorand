@@ -1,4 +1,12 @@
-"""CSPRNG expansion — expand a true-random seed via ChaCha20."""
+"""Legacy one-shot ChaCha20 keystream expansion.
+
+.. deprecated::
+
+    :class:`~src.high_level.engine.PhotoRandEngine` now uses the vetted,
+    reseedable :class:`~src.low_level.drbg.HMACDRBG` (NIST SP 800-90A) which
+    provides backtracking resistance and periodic reseeding.  This module
+    remains for backwards compatibility but should not be used in new code.
+"""
 
 from __future__ import annotations
 

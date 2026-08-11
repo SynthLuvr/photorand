@@ -6,6 +6,7 @@ from src.high_level.engine import PhotoRandEngine
 from src.high_level.seed import PhotoRandSeed
 from src.low_level.capture import WebcamCaptureError, capture_webcam_noise, generate_from_webcam
 from src.low_level.csprng import expand_entropy_chacha20
+from src.low_level.drbg import HMACDRBG
 from src.low_level.entropy import (
     EntropyAssessment,
     EntropyHealthError,
@@ -27,6 +28,7 @@ __version__ = "1.3.0"
 __all__ = [
     "EntropyAssessment",
     "EntropyHealthError",
+    "HMACDRBG",
     "HealthMonitor",
     "HealthStatus",
     "InsufficientEntropyError",
