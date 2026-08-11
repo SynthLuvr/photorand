@@ -9,6 +9,7 @@ from src.cli.seed_output import emit_seed_output, format_seed_value
 from src.high_level.seed import PhotoRandSeed
 from src.logger import logger
 from src.low_level.entropy import EntropyHealthError, InsufficientEntropyError
+from src.low_level.sample import DegenerateEntropyPoolError
 
 if TYPE_CHECKING:
     import argparse
@@ -29,6 +30,7 @@ def handle_extract(args: argparse.Namespace) -> None:
         IsADirectoryError,
         EntropyHealthError,
         InsufficientEntropyError,
+        DegenerateEntropyPoolError,
     ) as e:
         logger.error(str(e))
         sys.exit(1)

@@ -21,11 +21,16 @@ from src.low_level.generate import (
 from src.low_level.hash import hash_entropy_pool
 from src.low_level.health import HealthMonitor, HealthStatus, RuntimeHealthError
 from src.low_level.ingest import ingest_raw_image
-from src.low_level.sample import reduce_fixed_pattern_noise, sample_entropy_grid
+from src.low_level.sample import (
+    DegenerateEntropyPoolError,
+    reduce_fixed_pattern_noise,
+    sample_entropy_grid,
+)
 
 __version__ = "1.3.0"
 
 __all__ = [
+    "DegenerateEntropyPoolError",
     "EntropyAssessment",
     "EntropyHealthError",
     "HMACDRBG",

@@ -162,4 +162,4 @@ class TestGenerateWithAssessment:
     def test_refuses_low_entropy(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(generate, "estimate_entropy", _est_very_low)
         with pytest.raises(InsufficientEntropyError, match="below the 512-bit floor"):
-            generate_with_assessment("fake.arw", ingest_fn=_ingest)
+            generate_with_assessment("fake.arw", ingest_fn=_ingest, sample_fn=_sample)
