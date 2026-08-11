@@ -292,8 +292,7 @@ class TestGenerateFromWebcam:
         identical = [np.zeros((64, 64, 3), dtype=np.uint8)] * 20
         _install_fake_cv2(monkeypatch, identical)
 
-        # A stuck-at source produces a degenerate (all-same-symbol) pool, which
-        # the sampler rejects before conditioning even reaches the health checks.
+        # A stuck-at source yields a degenerate pool, rejected before health checks.
         with pytest.raises(DegenerateEntropyPoolError, match="degenerate pool"):
             generate_from_webcam(duration=5.0)
 

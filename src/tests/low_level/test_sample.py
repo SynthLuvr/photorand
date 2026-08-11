@@ -18,11 +18,10 @@ from src.low_level.sample import (
 
 @pytest.fixture
 def noisy_sensor_data() -> np.ndarray:
-    """A sensor grid with a deterministic DC offset + a stochastic noise floor.
+    """A grid with DC offset + stochastic noise that survives FPN reduction.
 
-    Unlike the perfectly separable ``mock_image_data`` (sequential integers),
-    this survives FPN reduction because the per-pixel noise is independently
-    random — the realistic case the sampler is designed for.
+    Unlike the perfectly separable ``mock_image_data``, this has independently
+    random per-pixel noise — the realistic case the sampler is designed for.
     """
     rng = np.random.default_rng(42)
     base = np.full((100, 100), 2048, dtype=np.uint16)
@@ -36,8 +35,7 @@ def noisy_sensor_data() -> np.ndarray:
 
 class TestSampleEntropyGrid:
     def test_returns_bytes(self, mock_image_data: np.ndarray) -> None:
-        # FPN reduction zeroes the perfectly separable mock grid, so test the
-        # grid mechanics in legacy (no-FPN) mode.
+        # FPN reduction zeroes the perfectly separable mock grid, so use legacy mode.
         result = sample_entropy_grid(mock_image_data, grid_spacing=10, reduce_fpn=False)
         assert isinstance(result, bytes)
 
@@ -147,11 +145,7 @@ class TestDegeneratePoolRejection:
             sample_entropy_grid(tiny, grid_spacing=64, reduce_fpn=False)
 
     def test_two_symbol_pool_not_rejected(self) -> None:
-        """A pool with two distinct symbols is *not* degenerate (just biased).
-
-        Downstream estimation handles bias; the sampler only rejects the
-        all-same (zero-entropy) case.
-        """
+        """Two distinct symbols is not degenerate — just biased."""
         data = np.zeros((20, 20), dtype=np.uint16)
         data[10:] = 7  # bottom half is 7, top half is 0
         result = sample_entropy_grid(data, grid_spacing=2, reduce_fpn=False)
