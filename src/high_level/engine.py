@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import os
 import string
+import time
 from typing import TYPE_CHECKING
 
 from src.high_level.seed import PhotoRandSeed
-from src.low_level.csprng import generate_chacha20_encryptor
+from src.low_level.drbg import HMACDRBG
 from src.low_level.health import HealthMonitor, HealthStatus
 
 if TYPE_CHECKING:
@@ -14,13 +16,24 @@ if TYPE_CHECKING:
     from typing import Any
 
 
+def _build_uniqueness_tweak() -> bytes:
+    """Build a *non-security* uniqueness nonce from environmental data.
+
+    The timestamp and PID are predictable and are **not** a source of
+    cryptographic entropy: they exist only so two engines sharing a seed
+    produce different streams.  All security comes from the seed and the
+    HMAC-DRBG.
+    """
+    return str(time.time_ns()).encode() + str(os.getpid()).encode()
+
+
 class PhotoRandEngine:
     """Cryptographically Secure Pseudo-Random Number Generator (CSPRNG).
 
-    This class uses a :class:`PhotoRandSeed` as its absolute source of entropy,
-    combined with environmental salting (nanosecond timestamp and process ID),
-    to fuel a continuous ChaCha20 stream cipher. It provides a stateful stream
-    of secure random values.
+    This class uses a :class:`PhotoRandSeed` as its absolute source of entropy
+    to seed an :class:`~src.low_level.drbg.HMACDRBG` (NIST SP 800-90A §10.1.2).
+    The DRBG provides backtracking resistance (post-generation state update),
+    periodic reseeding from OS entropy, and optional prediction resistance.
     """
 
     def __init__(
@@ -29,21 +42,27 @@ class PhotoRandEngine:
         salt: bool = True,
         *,
         continuous_health: bool = True,
+        prediction_resistance: bool = False,
+        reseed_interval: int | None = None,
     ) -> None:
-        """Initialize the CSPRNG using a PhotoRandSeed or an image path.
+        """Initialize the CSPRNG from a PhotoRandSeed or RAW image path.
 
         Args:
-            source: A :class:`PhotoRandSeed` object or path to a RAW image.
-            salt: When True (default), append environmental entropy (timestamp,
-                PID) to ensure a unique sequence for every execution. When False,
-                use the seed exactly as provided for a deterministic, reproducible
-                sequence.
-            continuous_health: When True (default), run NIST SP 800-90B continuous
-                health tests on output, raising :class:`RuntimeHealthError` on a fault.
+            source: A :class:`PhotoRandSeed` or path to a RAW image.
+            salt: When True (default), mix in a timestamp/PID uniqueness
+                tweak so two engines with the same seed diverge.  This is
+                *not* a security measure (see :func:`_build_uniqueness_tweak`);
+                when False the sequence is deterministic and reproducible.
+            continuous_health: When True (default), run NIST SP 800-90B
+                continuous health tests, raising :class:`RuntimeHealthError`
+                on a fault.
+            prediction_resistance: Reseed the DRBG from OS entropy before
+                every generate call (SP 800-90A prediction resistance).
+            reseed_interval: Max generates between automatic reseeds;
+                ``None`` uses the DRBG default (2³²).
 
         Raises:
-            RuntimeHealthError: If a continuous health test fails after generation
-                has started (raised by the monitor during ``next_*`` calls).
+            RuntimeHealthError: If a continuous health test fails during generation.
         """
         if isinstance(source, str):
             self.seed = PhotoRandSeed(source)
@@ -51,8 +70,20 @@ class PhotoRandEngine:
             self.seed = source
 
         raw_seed = self.seed.to_bytes()
-        self._encryptor = generate_chacha20_encryptor(raw_seed, salt=salt)
+        nonce = _build_uniqueness_tweak() if salt else b""
+
+        self._drbg = HMACDRBG(
+            raw_seed,
+            nonce=nonce,
+            prediction_resistance=prediction_resistance,
+            reseed_interval=reseed_interval,
+        )
         self._monitor: HealthMonitor | None = HealthMonitor() if continuous_health else None
+
+    @property
+    def drbg(self) -> HMACDRBG:
+        """The underlying HMAC-DRBG instance (NIST SP 800-90A §10.1.2)."""
+        return self._drbg
 
     @property
     def health_monitor(self) -> HealthMonitor | None:
@@ -64,8 +95,16 @@ class PhotoRandEngine:
         """A snapshot of the continuous health-test counters, or ``None`` if disabled."""
         return self._monitor.status if self._monitor is not None else None
 
+    def reseed(self, entropy_input: bytes) -> None:
+        """Reseed the DRBG with fresh entropy (forward security).
+
+        Args:
+            entropy_input: Fresh entropy bytes (at least 32 bytes).
+        """
+        self._drbg.reseed(entropy_input)
+
     def _get_bytes(self, n: int) -> bytes:
-        """Push *n* null bytes through the ChaCha20 encryptor and return the keystream.
+        """Generate *n* bytes from the HMAC-DRBG.
 
         Every byte produced passes through the continuous health monitor (when
         enabled) before being returned.
@@ -79,8 +118,7 @@ class PhotoRandEngine:
         Raises:
             RuntimeHealthError: If the continuous health monitor detects a fault.
         """
-        null_payload = b"\x00" * n
-        out = self._encryptor.update(null_payload)
+        out = self._drbg.generate(n)
         if self._monitor is not None:
             self._monitor.observe(out)
         return out

@@ -10,6 +10,7 @@ import pytest
 
 from src.high_level.engine import PhotoRandEngine
 from src.high_level.seed import PhotoRandSeed
+from src.low_level.drbg import HMACDRBG
 from src.low_level.health import RuntimeHealthError
 from src.tests.conftest import requires_raw_data
 
@@ -208,14 +209,14 @@ class TestContinuousHealth:
         assert engine.health_status.total_samples == 5
 
     def test_stuck_output_raises_through_engine(self) -> None:
-        class _StuckEncryptor:
-            """Fake encryptor that emits an all-zero (stuck-at) keystream."""
+        class _StuckDRBG:
+            """Fake DRBG that emits an all-zero (stuck-at) output."""
 
-            def update(self, data: bytes) -> bytes:
-                return b"\x00" * len(data)
+            def generate(self, n: int) -> bytes:
+                return b"\x00" * n
 
         engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
-        engine._encryptor = _StuckEncryptor()  # type: ignore[assignment]
+        engine._drbg = _StuckDRBG()  # type: ignore[assignment]
         with pytest.raises(RuntimeHealthError, match="Repetition Count"):
             engine.next_bytes(200)
 
@@ -227,3 +228,63 @@ class TestContinuousHealth:
         assert engine.health_monitor.failed is False
         assert engine.health_status is not None
         assert engine.health_status.adaptive_proportion_windows >= 8
+
+
+class TestDRBGBacking:
+    """The engine is backed by a vetted, reseedable HMAC-DRBG (SP 800-90A)."""
+
+    def test_drbg_property(self) -> None:
+        """The engine exposes its HMAC-DRBG instance."""
+        engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
+        assert isinstance(engine.drbg, HMACDRBG)
+
+    def test_engine_reseed_changes_stream(self) -> None:
+        """After reseeding, the output stream differs from the unreseeded continuation."""
+        seed = _make_synthetic_seed()
+
+        engine_reseeded = PhotoRandEngine(seed, salt=False)
+        engine_reseeded.next_bytes(32)  # skip first block
+        engine_reseeded.reseed(os.urandom(48))
+        reseeded_output = engine_reseeded.next_bytes(32)
+
+        engine_reference = PhotoRandEngine(seed, salt=False)
+        engine_reference.next_bytes(32)  # skip first block (no reseed)
+        reference_output = engine_reference.next_bytes(32)
+
+        assert reseeded_output != reference_output
+
+    def test_backtracking_resistance(self) -> None:
+        """Post-generation state differs from pre-generation state.
+
+        The HMAC-DRBG Update step (SP 800-90A §10.1.2.2) mixes the internal
+        state after every generate, so compromising the current state cannot
+        reveal past output.
+        """
+        engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
+        k_before = engine.drbg.key
+        v_before = engine.drbg.value
+
+        engine.next_bytes(32)
+
+        assert engine.drbg.key != k_before
+        assert engine.drbg.value != v_before
+
+    def test_prediction_resistance_makes_output_nondeterministic(self) -> None:
+        """With prediction resistance, same seed produces different streams."""
+        seed = _make_synthetic_seed()
+        engine1 = PhotoRandEngine(seed, salt=False, prediction_resistance=True)
+        engine2 = PhotoRandEngine(seed, salt=False, prediction_resistance=True)
+        assert engine1.next_bytes(64) != engine2.next_bytes(64)
+
+    def test_deterministic_without_salt_or_prediction_resistance(self) -> None:
+        """Without salt or prediction resistance, same seed = same stream."""
+        raw = os.urandom(64)
+
+        seed1 = PhotoRandSeed.__new__(PhotoRandSeed)
+        seed1._raw_seed = raw  # type: ignore[reportPrivateUsage]
+        seed2 = PhotoRandSeed.__new__(PhotoRandSeed)
+        seed2._raw_seed = raw  # type: ignore[reportPrivateUsage]
+
+        engine1 = PhotoRandEngine(seed1, salt=False)
+        engine2 = PhotoRandEngine(seed2, salt=False)
+        assert engine1.next_bytes(64) == engine2.next_bytes(64)
