@@ -17,21 +17,14 @@ if TYPE_CHECKING:
 
 
 def _build_uniqueness_tweak() -> bytes:
-    """Build a non-security uniqueness nonce from environmental data.
+    """Build a *non-security* uniqueness nonce from environmental data.
 
-    .. warning::
-
-        This is **not** a source of cryptographic entropy.  A nanosecond
-        timestamp and process ID are predictable by an attacker who can
-        observe process creation.  The nonce exists only so that two
-        :class:`PhotoRandEngine` instances initialised with the *same*
-        :class:`PhotoRandSeed` produce different output streams — a
-        uniqueness tweak, not a security measure.  All real security comes
-        from the seed entropy and the HMAC-DRBG construction.
+    The timestamp and PID are predictable and are **not** a source of
+    cryptographic entropy: they exist only so two engines sharing a seed
+    produce different streams.  All security comes from the seed and the
+    HMAC-DRBG.
     """
-    timestamp = str(time.time_ns()).encode()
-    pid = str(os.getpid()).encode()
-    return timestamp + pid
+    return str(time.time_ns()).encode() + str(os.getpid()).encode()
 
 
 class PhotoRandEngine:
@@ -52,34 +45,24 @@ class PhotoRandEngine:
         prediction_resistance: bool = False,
         reseed_interval: int | None = None,
     ) -> None:
-        """Initialize the CSPRNG using a PhotoRandSeed or an image path.
-
-        The engine is backed by an :class:`~src.low_level.drbg.HMACDRBG`
-        (NIST SP 800-90A §10.1.2), which provides backtracking resistance,
-        periodic reseeding from OS entropy, and optional prediction
-        resistance.
+        """Initialize the CSPRNG from a PhotoRandSeed or RAW image path.
 
         Args:
-            source: A :class:`PhotoRandSeed` object or path to a RAW image.
-            salt: When True (default), mix in a nanosecond-timestamp / PID
-                **uniqueness tweak** so that two engines with the same seed
-                produce different streams.  This is *not* a security measure
-                (see :func:`_build_uniqueness_tweak`); all cryptographic
-                security comes from the seed entropy and the HMAC-DRBG.
-                When False the sequence is deterministic and reproducible.
+            source: A :class:`PhotoRandSeed` or path to a RAW image.
+            salt: When True (default), mix in a timestamp/PID uniqueness
+                tweak so two engines with the same seed diverge.  This is
+                *not* a security measure (see :func:`_build_uniqueness_tweak`);
+                when False the sequence is deterministic and reproducible.
             continuous_health: When True (default), run NIST SP 800-90B
-                continuous health tests on output, raising
-                :class:`RuntimeHealthError` on a fault.
-            prediction_resistance: When True, reseed the DRBG from OS
-                entropy before *every* generate call (SP 800-90A prediction
-                resistance).  Defaults to False.
-            reseed_interval: Maximum number of generate calls between
-                automatic DRBG reseeds.  ``None`` uses the DRBG default
-                (2³²).
+                continuous health tests, raising :class:`RuntimeHealthError`
+                on a fault.
+            prediction_resistance: Reseed the DRBG from OS entropy before
+                every generate call (SP 800-90A prediction resistance).
+            reseed_interval: Max generates between automatic reseeds;
+                ``None`` uses the DRBG default (2³²).
 
         Raises:
-            RuntimeHealthError: If a continuous health test fails after generation
-                has started (raised by the monitor during ``next_*`` calls).
+            RuntimeHealthError: If a continuous health test fails during generation.
         """
         if isinstance(source, str):
             self.seed = PhotoRandSeed(source)
@@ -113,11 +96,7 @@ class PhotoRandEngine:
         return self._monitor.status if self._monitor is not None else None
 
     def reseed(self, entropy_input: bytes) -> None:
-        """Reseed the DRBG with fresh entropy.
-
-        Mixing fresh entropy into the DRBG state breaks the link between old
-        and future output (forward security) and is useful after a suspected
-        state compromise or simply to add freshness during long sessions.
+        """Reseed the DRBG with fresh entropy (forward security).
 
         Args:
             entropy_input: Fresh entropy bytes (at least 32 bytes).

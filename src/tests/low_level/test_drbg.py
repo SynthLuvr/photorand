@@ -1,13 +1,4 @@
-"""Tests for src.low_level.drbg.HMACDRBG (NIST SP 800-90A §10.1.2).
-
-Strategy:
-  - Use a fixed 64-byte seed for determinism.
-  - Verify output shape, determinism, and basic statistical sanity.
-  - Verify backtracking resistance (post-generate state update).
-  - Verify reseeding changes the output stream.
-  - Verify prediction resistance adds non-determinism.
-  - Verify long-stream output passes continuous health checks.
-"""
+"""Tests for src.low_level.drbg.HMACDRBG (NIST SP 800-90A §10.1.2)."""
 
 from __future__ import annotations
 
@@ -18,17 +9,8 @@ import pytest
 from src.low_level.drbg import HMACDRBG, MAX_BYTES_PER_REQUEST, MIN_ENTROPY
 from src.low_level.health import HealthMonitor
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 SEED_64 = bytes(range(64))  # deterministic 64-byte seed
 SEED_ALT = bytes(reversed(range(64)))  # different 64-byte seed
-
-
-# ===========================================================================
-# Output shape
-# ===========================================================================
 
 
 class TestOutputShape:
@@ -43,11 +25,6 @@ class TestOutputShape:
 
     def test_zero_bytes_returns_empty(self) -> None:
         assert HMACDRBG(SEED_64).generate(0) == b""
-
-
-# ===========================================================================
-# Determinism (no nonce, no prediction resistance)
-# ===========================================================================
 
 
 class TestDeterminism:
@@ -80,11 +57,6 @@ class TestDeterminism:
         a = HMACDRBG(SEED_64, nonce=b"nonce-a").generate(64)
         b = HMACDRBG(SEED_64, nonce=b"nonce-b").generate(64)
         assert a != b
-
-
-# ===========================================================================
-# Backtracking resistance
-# ===========================================================================
 
 
 class TestBacktrackingResistance:
@@ -126,11 +98,6 @@ class TestBacktrackingResistance:
         first = drbg.generate(32)
         second = drbg.generate(32)
         assert first != second
-
-
-# ===========================================================================
-# Reseeding
-# ===========================================================================
 
 
 class TestReseeding:
@@ -176,11 +143,6 @@ class TestReseeding:
             drbg.reseed(b"too short")
 
 
-# ===========================================================================
-# Prediction resistance
-# ===========================================================================
-
-
 class TestPredictionResistance:
     def test_prediction_resistance_makes_output_nondeterministic(self) -> None:
         """With prediction resistance, same seed produces different output each run."""
@@ -197,11 +159,6 @@ class TestPredictionResistance:
     def test_no_prediction_resistance_by_default(self) -> None:
         drbg = HMACDRBG(SEED_64)
         assert drbg.prediction_resistance is False
-
-
-# ===========================================================================
-# Input validation
-# ===========================================================================
 
 
 class TestInputValidation:
@@ -226,11 +183,6 @@ class TestInputValidation:
     def test_invalid_reseed_interval_raises(self) -> None:
         with pytest.raises(ValueError, match="at least 1"):
             HMACDRBG(SEED_64, reseed_interval=0)
-
-
-# ===========================================================================
-# Statistical sanity (weak but fast)
-# ===========================================================================
 
 
 class TestStatisticalSanity:
