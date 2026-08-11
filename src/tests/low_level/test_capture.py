@@ -12,7 +12,8 @@ import pytest
 from src.low_level import capture as cap
 from src.low_level import generate
 from src.low_level.capture import WebcamCaptureError, capture_webcam_noise, generate_from_webcam
-from src.low_level.entropy import EntropyAssessment, EntropyHealthError
+from src.low_level.entropy import EntropyAssessment
+from src.low_level.sample import DegenerateEntropyPoolError
 
 # This test file mocks package internals (capture.cv2 / _WARMUP_FRAMES).
 # pyright: reportPrivateUsage=false
@@ -287,12 +288,13 @@ class TestGenerateFromWebcam:
         assert assessment.passed_health_checks
         assert assessment.sufficient_for_seed
 
-    def test_constant_frames_fail_health(self, monkeypatch: pytest.MonkeyPatch) -> None:
+    def test_constant_frames_rejected(self, monkeypatch: pytest.MonkeyPatch) -> None:
         identical = [np.zeros((64, 64, 3), dtype=np.uint8)] * 20
         _install_fake_cv2(monkeypatch, identical)
 
-        # A stuck-at source fails the health check and is refused outright.
-        with pytest.raises(EntropyHealthError, match="health checks FAILED"):
+        # A stuck-at source produces a degenerate (all-same-symbol) pool, which
+        # the sampler rejects before conditioning even reaches the health checks.
+        with pytest.raises(DegenerateEntropyPoolError, match="degenerate pool"):
             generate_from_webcam(duration=5.0)
 
     def test_custom_functions_injected(self, monkeypatch: pytest.MonkeyPatch) -> None:

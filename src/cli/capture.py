@@ -10,6 +10,7 @@ from src.high_level.seed import PhotoRandSeed
 from src.logger import logger
 from src.low_level.capture import WebcamCaptureError
 from src.low_level.entropy import EntropyHealthError, InsufficientEntropyError
+from src.low_level.sample import DegenerateEntropyPoolError
 
 if TYPE_CHECKING:
     import argparse
@@ -38,7 +39,12 @@ def handle_capture(args: argparse.Namespace) -> None:
 
     try:
         seed = PhotoRandSeed.from_webcam(duration=duration, camera_index=camera_index)
-    except (WebcamCaptureError, EntropyHealthError, InsufficientEntropyError) as e:
+    except (
+        WebcamCaptureError,
+        EntropyHealthError,
+        InsufficientEntropyError,
+        DegenerateEntropyPoolError,
+    ) as e:
         logger.error(str(e))
         sys.exit(1)
     except Exception as e:
