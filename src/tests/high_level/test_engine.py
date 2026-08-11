@@ -2,11 +2,15 @@
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
+import pytest
+
 from src.high_level.engine import PhotoRandEngine
 from src.high_level.seed import PhotoRandSeed
+from src.low_level.health import RuntimeHealthError
 from src.tests.conftest import requires_raw_data
 
 # Determine the path to the test data
@@ -162,3 +166,64 @@ class TestPhotoRandEngine:
         batch_ints = engine.generate_batch(engine.next_int_range, 20, min_val=0, max_val=1)
         assert len(batch_ints) == 20
         assert all(x in [0, 1] for x in batch_ints)
+
+
+def _make_synthetic_seed() -> PhotoRandSeed:
+    """Build a PhotoRandSeed without ingesting a real image file.
+
+    Needed when RAW test data is unavailable (Git LFS pointers).
+    """
+    obj = PhotoRandSeed.__new__(PhotoRandSeed)
+    obj._raw_seed = os.urandom(64)  # type: ignore[reportPrivateUsage]
+    return obj
+
+
+class TestContinuousHealth:
+    """Continuous health tests are wired into every engine generation call."""
+
+    def test_monitor_present_by_default(self) -> None:
+        engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
+        assert engine.health_monitor is not None
+        assert engine.health_status is not None
+
+    def test_monitor_disabled(self) -> None:
+        engine = PhotoRandEngine(_make_synthetic_seed(), salt=False, continuous_health=False)
+        assert engine.health_monitor is None
+        assert engine.health_status is None
+
+    def test_generation_feeds_monitor(self) -> None:
+        engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
+        assert engine.health_status is not None
+        before = engine.health_status.total_samples
+        engine.next_bytes(500)
+        assert engine.health_status.total_samples == before + 500
+
+    def test_all_methods_feed_monitor(self) -> None:
+        engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
+        assert engine.health_status is not None
+        assert engine.health_status.total_samples == 0
+        engine.next_int(length=4)
+        assert engine.health_status.total_samples == 4
+        engine.next_bool()
+        assert engine.health_status.total_samples == 5
+
+    def test_stuck_output_raises_through_engine(self) -> None:
+        class _StuckEncryptor:
+            """Fake encryptor that emits an all-zero (stuck-at) keystream."""
+
+            def update(self, data: bytes) -> bytes:
+                return b"\x00" * len(data)
+
+        engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
+        engine._encryptor = _StuckEncryptor()  # type: ignore[assignment]
+        with pytest.raises(RuntimeHealthError, match="Repetition Count"):
+            engine.next_bytes(200)
+
+    def test_healthy_long_stream_passes(self) -> None:
+        engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
+        for _ in range(10):  # well over several AP windows
+            engine.next_bytes(1024)
+        assert engine.health_monitor is not None
+        assert engine.health_monitor.failed is False
+        assert engine.health_status is not None
+        assert engine.health_status.adaptive_proportion_windows >= 8

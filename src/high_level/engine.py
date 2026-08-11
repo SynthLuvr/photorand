@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from src.high_level.seed import PhotoRandSeed
 from src.low_level.csprng import generate_chacha20_encryptor
+from src.low_level.health import HealthMonitor, HealthStatus
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -22,7 +23,13 @@ class PhotoRandEngine:
     of secure random values.
     """
 
-    def __init__(self, source: PhotoRandSeed | str, salt: bool = True) -> None:
+    def __init__(
+        self,
+        source: PhotoRandSeed | str,
+        salt: bool = True,
+        *,
+        continuous_health: bool = True,
+    ) -> None:
         """Initialize the CSPRNG using a PhotoRandSeed or an image path.
 
         Args:
@@ -31,6 +38,12 @@ class PhotoRandEngine:
                 PID) to ensure a unique sequence for every execution. When False,
                 use the seed exactly as provided for a deterministic, reproducible
                 sequence.
+            continuous_health: When True (default), run NIST SP 800-90B continuous
+                health tests on output, raising :class:`RuntimeHealthError` on a fault.
+
+        Raises:
+            RuntimeHealthError: If a continuous health test fails after generation
+                has started (raised by the monitor during ``next_*`` calls).
         """
         if isinstance(source, str):
             self.seed = PhotoRandSeed(source)
@@ -39,18 +52,38 @@ class PhotoRandEngine:
 
         raw_seed = self.seed.to_bytes()
         self._encryptor = generate_chacha20_encryptor(raw_seed, salt=salt)
+        self._monitor: HealthMonitor | None = HealthMonitor() if continuous_health else None
+
+    @property
+    def health_monitor(self) -> HealthMonitor | None:
+        """The continuous health monitor, or ``None`` if disabled."""
+        return self._monitor
+
+    @property
+    def health_status(self) -> HealthStatus | None:
+        """A snapshot of the continuous health-test counters, or ``None`` if disabled."""
+        return self._monitor.status if self._monitor is not None else None
 
     def _get_bytes(self, n: int) -> bytes:
         """Push *n* null bytes through the ChaCha20 encryptor and return the keystream.
+
+        Every byte produced passes through the continuous health monitor (when
+        enabled) before being returned.
 
         Args:
             n: Number of bytes to generate.
 
         Returns:
             *n* secret random bytes.
+
+        Raises:
+            RuntimeHealthError: If the continuous health monitor detects a fault.
         """
         null_payload = b"\x00" * n
-        return self._encryptor.update(null_payload)
+        out = self._encryptor.update(null_payload)
+        if self._monitor is not None:
+            self._monitor.observe(out)
+        return out
 
     def next_bytes(self, length: int) -> bytes:
         """Generate a sequence of random bytes.
