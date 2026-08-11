@@ -13,13 +13,11 @@ class TestHealthMonitorHealthy:
     """A healthy uniform stream must never trip the monitor."""
 
     def test_random_stream_passes(self) -> None:
-        """os.urandom output is well-behaved and must not raise."""
         monitor = HealthMonitor()
         monitor.observe(os.urandom(4000))
         assert monitor.failed is False
 
     def test_incremental_healthy_chunks(self) -> None:
-        """Feeding a healthy stream byte-by-byte must not raise."""
         monitor = HealthMonitor()
         for byte in os.urandom(2000):
             monitor.observe(bytes([byte]))
@@ -30,36 +28,27 @@ class TestRepetitionCount:
     """Repetition Count Test (NIST SP 800-90B §4.4.1)."""
 
     def test_stuck_stream_raises(self) -> None:
-        """A long run of identical bytes is a stuck-at fault and must raise."""
         monitor = HealthMonitor()
         with pytest.raises(RuntimeHealthError, match="Repetition Count"):
             monitor.observe(b"\x00" * 200)
 
     def test_cutoff_for_8bit(self) -> None:
-        """For 8-bit symbols the cutoff is 179 (run of 179 fails)."""
         monitor = HealthMonitor(bits_per_symbol=8)
-        # 178 identical bytes is the longest passing run (run < cutoff).
         monitor.observe(b"\x00" * 178)
         assert monitor.failed is False
-        # One more trips it.
         with pytest.raises(RuntimeHealthError):
             monitor.observe(b"\x00")
 
     def test_run_detected_across_chunks(self) -> None:
-        """A stuck run split across many small observe() calls is still caught."""
         monitor = HealthMonitor()
         stuck = b"\x00" * 50
         with pytest.raises(RuntimeHealthError, match="Repetition Count"):
-            for _ in range(5):  # 250 identical bytes in 50-byte chunks
+            for _ in range(5):
                 monitor.observe(stuck)
 
     def test_brief_runs_pass(self) -> None:
-        """Short runs of identical bytes are normal and pass.
-
-        Uses uniformly distributed bytes so no single symbol is over-represented
-        (which would trip the Adaptive Proportion Test), keeping the focus on the
-        Repetition Count Test.
-        """
+        # Uniform random so no single symbol over-dominates and trips the
+        # Adaptive Proportion Test instead.
         monitor = HealthMonitor()
         monitor.observe(os.urandom(2000))
         assert monitor.failed is False
@@ -71,11 +60,10 @@ class TestAdaptiveProportion:
 
     @staticmethod
     def _biased_window() -> bytes:
-        """A 1024-byte window where the first symbol is over-represented.
+        """A 1024-byte window where the first symbol is heavily over-represented.
 
-        Symbol 0 (the window target) appears ~52 times — far above the cutoff of
-        14 — yet no consecutive run reaches the repetition-count cutoff (179),
-        so only the Adaptive Proportion Test fires.
+        Symbol 0 appears ~52 times (cutoff 14) without a consecutive run long
+        enough to trip the Repetition Count Test, so only the AP test fires.
         """
         window = bytearray((i % 255) + 1 for i in range(1024))
         window[0] = 0
@@ -84,21 +72,17 @@ class TestAdaptiveProportion:
         return bytes(window)
 
     def test_biased_window_raises(self) -> None:
-        """An over-represented symbol in a full window must raise."""
         monitor = HealthMonitor()
         with pytest.raises(RuntimeHealthError, match="Adaptive Proportion"):
             monitor.observe(self._biased_window())
 
     def test_partial_window_does_not_raise(self) -> None:
-        """A window shorter than ``window`` samples cannot be scored yet."""
+        # 500 bytes < default 1024-sample window, so no AP evaluation.
         monitor = HealthMonitor()
-        # Only 500 bytes — below the 1024 default window — so no AP evaluation.
-        partial = self._biased_window()[:500]
-        monitor.observe(partial)
+        monitor.observe(self._biased_window()[:500])
         assert monitor.failed is False
 
     def test_biased_detected_across_chunks(self) -> None:
-        """A biased window fed in small chunks is still scored once complete."""
         monitor = HealthMonitor()
         window = self._biased_window()
         with pytest.raises(RuntimeHealthError, match="Adaptive Proportion"):
@@ -110,7 +94,6 @@ class TestLatching:
     """Once a fault is detected the monitor latches permanently."""
 
     def test_latched_after_failure(self) -> None:
-        """After a failure every subsequent observe() also raises."""
         monitor = HealthMonitor()
         with pytest.raises(RuntimeHealthError):
             monitor.observe(b"\x00" * 200)
@@ -119,7 +102,6 @@ class TestLatching:
             monitor.observe(b"\x01")
 
     def test_latched_after_adaptive_failure(self) -> None:
-        """Latching also applies after an Adaptive Proportion failure."""
         monitor = HealthMonitor()
         window = bytearray((i % 255) + 1 for i in range(1024))
         window[0] = 42
@@ -148,17 +130,13 @@ class TestStatus:
         monitor.observe(os.urandom(2048))
         status = monitor.status
         assert status.total_samples == 2048
-        # Two full windows of 1024 have been scored.
         assert status.adaptive_proportion_windows == 2
-        # The repetition-count cutoff for 8-bit symbols.
         assert status.repetition_count_cutoff == 179
         assert status.adaptive_proportion_cutoff == 14
         assert status.repetition_count_max_run < status.repetition_count_cutoff
 
     def test_status_counts_max_run(self) -> None:
-        """max_run tracks the longest run seen even when it does not fail."""
         monitor = HealthMonitor()
-        # 50 identical bytes — under the 179 cutoff — should be recorded as max_run.
         monitor.observe(b"\x07" * 50)
         assert monitor.status.repetition_count_max_run == 50
 

@@ -39,9 +39,7 @@ class PhotoRandEngine:
                 use the seed exactly as provided for a deterministic, reproducible
                 sequence.
             continuous_health: When True (default), run NIST SP 800-90B continuous
-                health tests (Repetition Count + Adaptive Proportion) on every byte
-                the engine produces, raising :class:`RuntimeHealthError` on a fault.
-                Set to False to disable (not recommended).
+                health tests on output, raising :class:`RuntimeHealthError` on a fault.
 
         Raises:
             RuntimeHealthError: If a continuous health test fails after generation

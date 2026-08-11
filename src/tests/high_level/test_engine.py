@@ -171,8 +171,7 @@ class TestPhotoRandEngine:
 def _make_synthetic_seed() -> PhotoRandSeed:
     """Build a PhotoRandSeed without ingesting a real image file.
 
-    Bypasses the pipeline so the continuous-health tests run even when RAW test
-    data is unavailable (Git LFS pointers).
+    Needed when RAW test data is unavailable (Git LFS pointers).
     """
     obj = PhotoRandSeed.__new__(PhotoRandSeed)
     obj._raw_seed = os.urandom(64)  # type: ignore[reportPrivateUsage]
@@ -180,47 +179,35 @@ def _make_synthetic_seed() -> PhotoRandSeed:
 
 
 class TestContinuousHealth:
-    """Verify the engine wires continuous health tests into every generation call.
-
-    These tests do not require real RAW data — they operate on the *output*
-    stream, which is independent of the input image.
-    """
+    """Continuous health tests are wired into every engine generation call."""
 
     def test_monitor_present_by_default(self) -> None:
-        """A default engine has an active health monitor."""
         engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
         assert engine.health_monitor is not None
         assert engine.health_status is not None
 
     def test_monitor_disabled(self) -> None:
-        """``continuous_health=False`` disables the monitor entirely."""
         engine = PhotoRandEngine(_make_synthetic_seed(), salt=False, continuous_health=False)
         assert engine.health_monitor is None
         assert engine.health_status is None
 
     def test_generation_feeds_monitor(self) -> None:
-        """Bytes produced by next_bytes flow through the monitor."""
         engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
         assert engine.health_status is not None
         before = engine.health_status.total_samples
         engine.next_bytes(500)
-        after = engine.health_status.total_samples
-        assert after == before + 500
+        assert engine.health_status.total_samples == before + 500
 
     def test_all_methods_feed_monitor(self) -> None:
-        """Every generation method advances the monitor's sample count."""
         engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
         assert engine.health_status is not None
         assert engine.health_status.total_samples == 0
         engine.next_int(length=4)
-        after_int = engine.health_status.total_samples
-        assert after_int == 4
+        assert engine.health_status.total_samples == 4
         engine.next_bool()
-        assert engine.health_status.total_samples == after_int + 1
+        assert engine.health_status.total_samples == 5
 
     def test_stuck_output_raises_through_engine(self) -> None:
-        """A stuck-at fault in the output stream surfaces as RuntimeHealthError."""
-
         class _StuckEncryptor:
             """Fake encryptor that emits an all-zero (stuck-at) keystream."""
 
@@ -233,10 +220,8 @@ class TestContinuousHealth:
             engine.next_bytes(200)
 
     def test_healthy_long_stream_passes(self) -> None:
-        """A long stream of CSPRNG output stays healthy and never raises."""
         engine = PhotoRandEngine(_make_synthetic_seed(), salt=False)
-        # Generate well over several adaptive-proportion windows.
-        for _ in range(10):
+        for _ in range(10):  # well over several AP windows
             engine.next_bytes(1024)
         assert engine.health_monitor is not None
         assert engine.health_monitor.failed is False
