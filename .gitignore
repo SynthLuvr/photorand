@@ -10,8 +10,12 @@ dist/
 .venv/
 venv/
 
-# uv
-uv.lock
+# Coverage
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
+coverage/
 
 # IDE
 .idea/
@@ -24,9 +28,12 @@ uv.lock
 .DS_Store
 Thumbs.db
 
-# Test / coverage
+# Test caches
 .pytest_cache/
 .ruff_cache/
 
 # C extensions
 *.so
+
+# canonist generated configs (kept only with --keep-config)
+.canonist/

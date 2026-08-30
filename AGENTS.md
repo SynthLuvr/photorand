@@ -5,29 +5,57 @@ Instructions for AI coding agents working in this repository.
 ## Quick Start
 
 ```bash
-uv sync
-uv run pytest          # run tests
-uv run pyright src/    # type-check
-uv run ruff check src/     # lint
-uv run ruff format --check src/  # format check
+uv sync --all-extras   # install dependencies (canonist + poethepoet)
+uv run poe lint        # full static pipeline (format check, lint, typecheck, lock, audit, dupes)
+uv run poe test        # run tests
 ```
+
+The Poe tasks invoke every tool as `python -m <module>` rather than through
+generated console-script launchers; the equivalent module form also works
+directly (`uv run python -m poethepoet check`).
 
 ## Required Workflow
 
 Always run these before considering work complete:
 
 ```bash
-uv run pyright src/ && uv run ruff check src/ && uv run ruff format --check src/ && uv run pytest
+uv run poe check   # the full lint pipeline plus the test suite
 ```
 
-All four must pass with zero errors.
+Everything must pass with zero errors. `poe check` runs `poe lint` (ruff format
+check, ruff check incl. SAST, pyright strict, lockfile freshness, pip-audit,
+duplication gate) followed by `poe test` (80% coverage gate).
+
+## Toolchain
+
+Lint, format, testing, and environment checks come from
+[canonist](https://github.com/SynthLuvr/canonist) — one dev dependency that bundles
+Ruff, Pyright (strict), pytest + pytest-cov, pip-audit, the lucidshark-duplo
+duplication gate, and the canonical ruff/pyright/pytest presets.
+
+- Run tooling through `uv run poe <task>` (`poe lint`, `poe format`, `poe test`,
+  `poe doctor`), not by invoking tools directly.
+- `python -m canonist lint` / `format` accept path arguments; `lint` also takes
+  `--fast` (skips pip-audit and the duplication gate).
+- `poe doctor` (`python -m canonist doctor`) diagnoses toolchain/environment problems.
+- The duplication gate downloads a pinned prebuilt binary on first use. Where it
+  cannot be downloaded or run it prints `Duplication gate SKIPPED` locally and exits 0,
+  and fails in CI. `SKIPPED` means the gate did **not** run — do not read it as a pass,
+  and do not move or rename the binary to get around the block.
+- Tool, rule, threshold, and preset changes belong in canonist — bump its version in
+  `pyproject.toml` to pick them up. Do not add per-step tool scripts or re-inline tool
+  config blocks here; keep only true local deltas under `[tool.canonist.*]` (this
+  repo has one: tests synthesize fixture data with `random.Random`, so `S311` is
+  ignored alongside the preset's `S101` under `src/tests/*`).
 
 ## Coding Conventions (Enforced)
 
 These are **not** preferences — the toolchain will fail if you violate them:
 
 ### Use `from __future__ import annotations`
-Every module must start with this import for consistent type-hint semantics.
+
+Every module must start with this import for consistent type-hint semantics. Enforced
+by ruff `I002` (`required-imports`), so a missing one fails `poe lint`.
 
 ```python
 # ❌ Wrong
@@ -41,9 +69,10 @@ def foo() -> str: ...
 ```
 
 ### Strict type checking
+
 Pyright runs in `strict` mode. All function parameters and return types must
-have explicit type annotations. Strict mode also rejects implicit `Any` types
-and untyped `dict`/`list` literals where the type can't be inferred.
+have explicit type annotations. Strict mode also rejects implicit `Any` types and
+untyped `dict`/`list` literals where the type can't be inferred.
 
 ```python
 # ❌ Wrong
@@ -56,6 +85,7 @@ def add(a: int, b: int) -> int:
 ```
 
 ### Formatting
+
 - Line length: 100 characters
 - Double quotes for strings
 - Import sorting via `isort` (ruff's `I` rules)
@@ -66,20 +96,22 @@ def add(a: int, b: int) -> int:
 If the linter complains about formatting, run:
 
 ```bash
-uv run ruff format src/
-uv run ruff check --fix src/
+uv run poe format
 ```
 
-This runs two steps:
-1. `ruff format` — formats all files (indentation, quotes, etc.)
+This runs `python -m canonist format`:
+
+1. `ruff format` — formats all files
 2. `ruff check --fix` — applies lint auto-fixes (import sorting, etc.)
 
 ## Project Structure
 
 - Source code lives in `src/`
-- Tests live in `src/tests/` (filenames start with `test_`)
+- Tests live in `src/tests/` (filenames start with `test_`), and are excluded from
+  coverage measurement so the 80% gate reflects real source coverage
 - Python ≥ 3.14 — managed automatically by uv
-- Dependencies declared in `pyproject.toml`
+- Dependencies are declared in `pyproject.toml`; the lockfile (`uv.lock`) is committed
+  and its freshness is checked by `poe lint`
 
 ### Package Layout
 

@@ -5,6 +5,57 @@ from __future__ import annotations
 import argparse
 
 
+def _source_parent() -> argparse.ArgumentParser:
+    """Parent parser with the shared RAW-image source argument."""
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
+        "--from",
+        "--file",
+        "-f",
+        "--input",
+        dest="image_path",
+        required=True,
+        help="Path to the RAW image file (e.g., .ARW, .CR2).",
+    )
+    return parent
+
+
+def _output_parent() -> argparse.ArgumentParser:
+    """Parent parser with the shared output-file argument."""
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
+        "-o",
+        "--out",
+        "--to",
+        dest="out",
+        help="File path to save output. Omit to print to stdout.",
+    )
+    return parent
+
+
+def _binary_flag_parent() -> argparse.ArgumentParser:
+    """Parent parser with the shared raw-binary output flag."""
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
+        "--binary",
+        action="store_true",
+        help="Write raw binary bytes when saving to a file (requires --out).",
+    )
+    return parent
+
+
+def _verbose_parent() -> argparse.ArgumentParser:
+    """Parent parser with the shared verbose flag."""
+    parent = argparse.ArgumentParser(add_help=False)
+    parent.add_argument(
+        "-v",
+        "--verbose",
+        action="store_true",
+        help="Enable verbose logging.",
+    )
+    return parent
+
+
 def _add_format_subparsers(
     command_parser: argparse.ArgumentParser,
     common: argparse.ArgumentParser,
@@ -45,44 +96,18 @@ def create_parser() -> tuple[
     # ------------------------------------------------------------------
     # Common Arguments
     # ------------------------------------------------------------------
-    extract_common = argparse.ArgumentParser(add_help=False)
-    extract_common.add_argument(
-        "--from",
-        "--file",
-        "-f",
-        "--input",
-        dest="image_path",
-        required=True,
-        help="Path to the RAW image file (e.g., .ARW, .CR2).",
-    )
-    extract_common.add_argument(
-        "-o",
-        "--out",
-        "--to",
-        dest="out",
-        help="File path to save output. Omit to print to stdout.",
-    )
-    extract_common.add_argument(
-        "--binary",
-        action="store_true",
-        help="Write raw binary bytes when saving to a file (requires --out).",
-    )
-    extract_common.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging.",
+    extract_common = argparse.ArgumentParser(
+        add_help=False,
+        parents=[_source_parent(), _output_parent(), _binary_flag_parent(), _verbose_parent()],
     )
 
-    generate_common = argparse.ArgumentParser(add_help=False)
-    generate_common.add_argument(
-        "--from",
-        "--file",
-        "-f",
-        "--input",
-        dest="image_path",
-        required=True,
-        help="Path to the RAW image file (e.g., .ARW, .CR2).",
+    generate_common = argparse.ArgumentParser(
+        add_help=False,
+        parents=[
+            _source_parent(),
+            _output_parent(),
+            _verbose_parent(),
+        ],
     )
     generate_common.add_argument(
         "-n",
@@ -92,22 +117,9 @@ def create_parser() -> tuple[
         help="Number of items to generate (default: 1).",
     )
     generate_common.add_argument(
-        "-o",
-        "--out",
-        "--to",
-        dest="out",
-        help="File path to save output. Omit to print to stdout.",
-    )
-    generate_common.add_argument(
         "--deterministic",
         action="store_true",
         help="Produce a reproducible sequence by skipping environmental salting.",
-    )
-    generate_common.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging.",
     )
 
     # ------------------------------------------------------------------
@@ -122,7 +134,10 @@ def create_parser() -> tuple[
     # ------------------------------------------------------------------
     # 'capture' subcommand (webcam source)
     # ------------------------------------------------------------------
-    capture_common = argparse.ArgumentParser(add_help=False)
+    capture_common = argparse.ArgumentParser(
+        add_help=False,
+        parents=[_output_parent(), _binary_flag_parent(), _verbose_parent()],
+    )
     capture_common.add_argument(
         "--duration",
         type=float,
@@ -134,24 +149,6 @@ def create_parser() -> tuple[
         type=int,
         default=0,
         help="Camera device index (default: 0).",
-    )
-    capture_common.add_argument(
-        "-o",
-        "--out",
-        "--to",
-        dest="out",
-        help="File path to save output. Omit to print to stdout.",
-    )
-    capture_common.add_argument(
-        "--binary",
-        action="store_true",
-        help="Write raw binary bytes when saving to a file (requires --out).",
-    )
-    capture_common.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging.",
     )
 
     capture_parser = subparsers.add_parser(
@@ -165,16 +162,8 @@ def create_parser() -> tuple[
     # ------------------------------------------------------------------
     assess_parser = subparsers.add_parser(
         "assess",
+        parents=[_source_parent(), _verbose_parent()],
         help="Measure the entropy quality of a RAW image's sensor noise.",
-    )
-    assess_parser.add_argument(
-        "--from",
-        "--file",
-        "-f",
-        "--input",
-        dest="image_path",
-        required=True,
-        help="Path to the RAW image file (e.g., .ARW, .CR2).",
     )
     assess_parser.add_argument(
         "--no-fpn",
@@ -186,12 +175,6 @@ def create_parser() -> tuple[
         "--json",
         action="store_true",
         help="Output the assessment as JSON instead of a human-readable report.",
-    )
-    assess_parser.add_argument(
-        "-v",
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging.",
     )
 
     # ------------------------------------------------------------------
