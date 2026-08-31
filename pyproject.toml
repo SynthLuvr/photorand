@@ -24,11 +24,10 @@ Homepage = "https://github.com/illescasDaniel/photorand"
 photorand = "src.cli.main:main"
 
 [project.optional-dependencies]
-dev = [
-    "pytest>=9.1.1",
-    "pyright>=1.1.411",
-    "ruff>=0.16.0",
-]
+# The lint/format/test toolchain comes from canonist — one dev dependency
+# that bundles ruff, pyright, pytest (+coverage), pip-audit, the
+# duplication gate, and the canonical tool presets. Poe stays consumer-side.
+dev = ["canonist>=0.2.1", "poethepoet>=0.48.0"]
 build = ["build", "twine"]
 examples = ["imageio", "matplotlib"]
 
@@ -42,20 +41,35 @@ packages = ["src"]
 [tool.hatch.build.targets.sdist]
 exclude = ["src/tests/data"]
 
-[tool.pytest.ini_options]
-testpaths = ["src/tests"]
-python_files = ["test_*.py"]
+# Poe auto-detects the uv virtualenv, so task commands run tools directly
+# without an `uv run` prefix. Every task goes through `python -m <module>`
+# rather than a console script, so nothing depends on generated
+# entry-point launchers.
+[tool.poe.tasks.lint]
+help = "Full static pipeline via canonist (format check, lint, typecheck, lock, audit, dupes)"
+cmd = "python -m canonist lint"
 
-[tool.ruff]
-target-version = "py314"
-line-length = 100
+[tool.poe.tasks.format]
+help = "Auto-format and auto-fix lint issues (writes changes)"
+cmd = "python -m canonist format"
 
-[tool.ruff.lint]
-select = ["E", "F", "W", "I", "UP", "B", "C4", "SIM", "TCH"]
+[tool.poe.tasks.test]
+help = "Run the test suite with the 80% coverage gate"
+cmd = "python -m canonist test"
 
-[tool.ruff.lint.isort]
-known-first-party = ["src"]
+[tool.poe.tasks.doctor]
+help = "Diagnose the environment, bundled tools, and generated configs"
+cmd = "python -m canonist doctor"
 
-[tool.pyright]
-pythonVersion = "3.14"
-typeCheckingMode = "strict"
+[tool.poe.tasks.check]
+help = "Everything: the full lint pipeline plus the test suite"
+sequence = ["lint", "test"]
+
+# Local deltas over canonist's bundled presets (deep-merged at invocation
+# time: later keys win, lists replace, tables merge recursively). Keep only
+# true local deltas here — rule and preset changes belong in canonist; bump
+# its version to pick them up.
+[tool.canonist.ruff.lint.per-file-ignores]
+# Lists replace (not merge), so keep the preset's S101 alongside: tests use
+# `random.Random` to synthesize fixture data (never for crypto purposes).
+"src/tests/*" = ["S101", "S311"]

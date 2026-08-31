@@ -17,42 +17,11 @@ from src.low_level.sample import DegenerateEntropyPoolError
 
 # This test file mocks package internals (capture.cv2 / _WARMUP_FRAMES).
 # pyright: reportPrivateUsage=false
-
-
-def _assessment(
-    *,
-    total_entropy_bits: float = 600.0,
-    max_seed_bytes: int = 64,
-    repetition_count_passed: bool = True,
-    adaptive_proportion_passed: bool = True,
-) -> EntropyAssessment:
-    """Build an EntropyAssessment with controlled gate-relevant fields."""
-    return EntropyAssessment(
-        sample_count=256,
-        bits_per_symbol=4,
-        symbol_alphabet_size=16,
-        most_common_value_estimate=2.4,
-        collision_estimate=2.6,
-        markov_estimate=2.5,
-        shannon_entropy=2.9,
-        min_entropy=2.4,
-        total_entropy_bits=total_entropy_bits,
-        max_seed_bytes=max_seed_bytes,
-        chi_square_statistic=12.0,
-        chi_square_p_value=0.6,
-        is_uniform=True,
-        repetition_count_passed=repetition_count_passed,
-        repetition_count_max_run=4,
-        repetition_count_cutoff=12,
-        adaptive_proportion_passed=adaptive_proportion_passed,
-        adaptive_proportion_max_count=40,
-        adaptive_proportion_cutoff=59,
-        adaptive_proportion_windows=1,
-    )
+from src.tests.helpers import make_assessment
 
 
 def _est_sufficient(_data: bytes) -> EntropyAssessment:
-    return _assessment()
+    return make_assessment()
 
 
 # ---------------------------------------------------------------------------

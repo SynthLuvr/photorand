@@ -3,28 +3,26 @@ name: CI
 on:
   pull_request:
 
+permissions:
+  contents: read
+
 jobs:
   ci:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7.0.1
 
-      - uses: astral-sh/setup-uv@v9.0.0
+      - uses: astral-sh/setup-uv@v10.0.1
 
       - name: Set up Python
         run: uv python install 3.14
 
       - name: Install dependencies
-        run: uv sync --all-extras
-
-      - name: Type-check
-        run: uv run pyright src/
+        # --locked also fails the build if uv.lock is stale against pyproject.toml.
+        run: uv sync --all-extras --locked
 
       - name: Lint
-        run: uv run ruff check src/
-
-      - name: Format check
-        run: uv run ruff format --check src/
+        run: uv run python -m poethepoet lint
 
       - name: Test
-        run: uv run pytest
+        run: uv run python -m poethepoet test

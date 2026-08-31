@@ -12,10 +12,13 @@ A True Random Number Generator (TRNG) using raw camera sensor data to extract ph
 |------|---------|
 | [uv](https://docs.astral.sh/uv/) | Package manager & virtual environment |
 | [Python](https://www.python.org) | Language (≥ 3.14, managed by uv) |
-| [Pyright](https://github.com/microsoft/pyright) | Static type checking (strict mode) |
-| [Ruff](https://docs.astral.sh/ruff/) | Linter and formatter |
-| [pytest](https://docs.pytest.org/) | Test runner |
+| [canonist](https://github.com/SynthLuvr/canonist) | The shared lint/format/test toolchain |
+| [Poe the Poet](https://poethepoet.natn.io/) | Task runner (single-command `poe lint` / `poe test`) |
 | [Hatch](https://hatch.pypa.io/) | Build backend |
+
+Bundled inside canonist: Ruff (formatter + linter + SAST rules), Pyright (strict type
+checking), pytest + pytest-cov (test runner and 80% coverage gate), pip-audit
+(dependency vulnerability scan), and lucidshark-duplo (code-duplication detection).
 
 ## Project Structure
 
@@ -30,7 +33,8 @@ A True Random Number Generator (TRNG) using raw camera sensor data to extract ph
 │   └── tests/             # Test suite organized by layer
 ├── docs/                  # Technical documentation
 ├── examples/              # Code samples and useful scripts
-├── pyproject.toml         # Project config, deps, tool settings
+├── pyproject.toml         # Project config, deps, Poe tasks, canonist overrides
+├── uv.lock                # Lockfile (committed; freshness checked by `poe lint`)
 └── AGENTS.md              # AI agent instructions
 ```
 
@@ -38,38 +42,54 @@ A True Random Number Generator (TRNG) using raw camera sensor data to extract ph
 
 ```bash
 uv sync                      # install dependencies
-uv sync --all-extras         # also install dev deps (pytest, ruff, pyright)
+uv sync --all-extras         # also install dev deps (canonist + poethepoet)
 
-uv run pytest                # run unit tests
+uv run poe lint              # full static pipeline (format check, lint, typecheck, lock, audit, dupes)
+uv run poe test              # run unit tests
 ```
 
 ## Commands
 
-### Type Check
+Tasks run via [Poe the Poet](https://poethepoet.natn.io/) (`uv run poe <task>`, or
+`uv run python -m poethepoet <task>`); each delegates to
+[canonist](https://github.com/SynthLuvr/canonist), the shared toolchain.
 
-```bash
-uv run pyright src/          # strict type checking
-```
+| Task | Runs |
+|------|------|
+| `poe lint` | Full static pipeline via `canonist lint` (see below) |
+| `poe test` | Test suite via `canonist test` (80% coverage gate) |
+| `poe format` | Auto-format and auto-fix lint issues via `canonist format` (writes changes) |
+| `poe doctor` | Environment diagnostics via `canonist doctor` |
+| `poe check` | Everything — `poe lint` plus `poe test` |
 
 ### Lint
 
-```bash
-uv run ruff check src/       # lint all files
-```
+`poe lint` runs `python -m canonist lint`, a fail-fast pipeline where each step's
+exit code propagates:
+
+1. Ruff format check
+2. Ruff check (incl. the bandit/SAST rule set)
+3. Pyright — strict type checking
+4. `uv lock --check` — lockfile freshness
+5. pip-audit — dependency vulnerability (SCA) scan
+6. lucidshark-duplo — duplication gate, 5% threshold
+
+Steps 5 and 6 are skipped by `--fast`.
 
 ### Format
 
 ```bash
-uv run ruff format src/      # format all files (writes changes)
-uv run ruff format --check src/  # check formatting without writing
-uv run ruff check --fix src/ # auto-fix lint issues
+uv run poe format   # ruff format, then ruff check --fix (writes changes)
 ```
 
 ### Test
 
 ```bash
-uv run pytest                # run all tests
+uv run poe test     # pytest with the canonical coverage gate
 ```
+
+Tests live under `src/tests/` and are omitted from coverage measurement, so the
+80% gate reflects real source coverage.
 
 ---
 

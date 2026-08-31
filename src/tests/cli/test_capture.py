@@ -15,6 +15,7 @@ from unittest.mock import patch
 from src.cli.main import main
 from src.low_level.capture import WebcamCaptureError
 from src.low_level.entropy import EntropyAssessment, EntropyHealthError, InsufficientEntropyError
+from src.tests.helpers import make_assessment
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -28,41 +29,8 @@ if TYPE_CHECKING:
 MOCK_SEED: bytes = bytes(range(64))
 
 
-def _assessment(
-    *,
-    repetition_count_passed: bool = True,
-    adaptive_proportion_passed: bool = True,
-    total_entropy_bits: float = 600.0,
-    is_uniform: bool = True,
-    min_entropy: float = 2.5,
-) -> EntropyAssessment:
-    """Build an EntropyAssessment for CLI policy tests."""
-    return EntropyAssessment(
-        sample_count=256,
-        bits_per_symbol=4,
-        symbol_alphabet_size=16,
-        most_common_value_estimate=2.4,
-        collision_estimate=2.6,
-        markov_estimate=2.5,
-        shannon_entropy=2.9,
-        min_entropy=min_entropy,
-        total_entropy_bits=total_entropy_bits,
-        max_seed_bytes=64,
-        chi_square_statistic=12.0,
-        chi_square_p_value=0.6,
-        is_uniform=is_uniform,
-        repetition_count_passed=repetition_count_passed,
-        repetition_count_max_run=4,
-        repetition_count_cutoff=12,
-        adaptive_proportion_passed=adaptive_proportion_passed,
-        adaptive_proportion_max_count=40,
-        adaptive_proportion_cutoff=59,
-        adaptive_proportion_windows=1,
-    )
-
-
 def _good_assessment() -> EntropyAssessment:
-    return _assessment()
+    return make_assessment()
 
 
 class CaptureResult(NamedTuple):

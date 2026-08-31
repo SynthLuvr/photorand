@@ -19,42 +19,11 @@ from src.low_level.generate import (
     generate_with_assessment,
 )
 from src.tests.conftest import requires_raw_data
+from src.tests.helpers import make_assessment
 
 # Determine the path to the test data
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 TEST_IMAGE = str(DATA_DIR / "DSC02111.ARW")
-
-
-def _assessment(
-    *,
-    total_entropy_bits: float = 600.0,
-    max_seed_bytes: int = 64,
-    repetition_count_passed: bool = True,
-    adaptive_proportion_passed: bool = True,
-) -> EntropyAssessment:
-    """Build an EntropyAssessment with controlled gate-relevant fields."""
-    return EntropyAssessment(
-        sample_count=256,
-        bits_per_symbol=4,
-        symbol_alphabet_size=16,
-        most_common_value_estimate=2.4,
-        collision_estimate=2.6,
-        markov_estimate=2.5,
-        shannon_entropy=2.9,
-        min_entropy=2.4,
-        total_entropy_bits=total_entropy_bits,
-        max_seed_bytes=max_seed_bytes,
-        chi_square_statistic=12.0,
-        chi_square_p_value=0.6,
-        is_uniform=True,
-        repetition_count_passed=repetition_count_passed,
-        repetition_count_max_run=4,
-        repetition_count_cutoff=12,
-        adaptive_proportion_passed=adaptive_proportion_passed,
-        adaptive_proportion_max_count=40,
-        adaptive_proportion_cutoff=59,
-        adaptive_proportion_windows=1,
-    )
 
 
 # 280 bytes; the content is irrelevant once the estimate is mocked.
@@ -73,19 +42,19 @@ def _ingest(_path: str) -> np.ndarray:
 
 
 def _est_sufficient(_data: bytes) -> EntropyAssessment:
-    return _assessment()
+    return make_assessment()
 
 
 def _est_low_truncatable(_data: bytes) -> EntropyAssessment:
-    return _assessment(total_entropy_bits=400.0, max_seed_bytes=50)
+    return make_assessment(total_entropy_bits=400.0, max_seed_bytes=50)
 
 
 def _est_health_fail(_data: bytes) -> EntropyAssessment:
-    return _assessment(repetition_count_passed=False)
+    return make_assessment(repetition_count_passed=False)
 
 
 def _est_very_low(_data: bytes) -> EntropyAssessment:
-    return _assessment(total_entropy_bits=100.0, max_seed_bytes=12)
+    return make_assessment(total_entropy_bits=100.0, max_seed_bytes=12)
 
 
 @requires_raw_data
